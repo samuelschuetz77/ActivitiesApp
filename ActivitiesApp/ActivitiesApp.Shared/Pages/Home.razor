@@ -46,6 +46,17 @@ Welcome to your new app running on <em>@factor</em> using <em>@platform</em>.
 
     <div class="mb-3 row">
         <div class="col">
+            <label>Latitude:</label>
+            <InputNumber @bind-Value="newActivity.Latitude" class="form-control" />
+        </div>
+        <div class="col">
+            <label>Longitude:</label>
+            <InputNumber @bind-Value="newActivity.Longitude" class="form-control" />
+        </div>
+    </div>
+
+    <div class="mb-3 row">
+        <div class="col">
             <label>Min Age:</label>
             <InputNumber @bind-Value="newActivity.MinAge" class="form-control" />
         </div>
