@@ -1,0 +1,101 @@
+@page "/activity/{Id:guid}"
+@using ActivitiesApp.Shared.Models
+@using ActivitiesApp.Shared.Services
+@inject IActivityService ActivityService
+@inject NavigationManager Navigation
+
+<div class="detail-page">
+    @if (activity == null)
+    {
+        <div class="loading">Loading activity...</div>
+    }
+    else
+    {
+        <button class="back-button" @onclick="GoBack">Back</button>
+
+        <div class="detail-card">
+            <div class="detail-image">
+                @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                {
+                    <img src="@activity.ImageUrl" alt="@activity.Name" />
+                }
+                else
+                {
+                    <div class="image-placeholder detail">
+                        <span>No Image Available</span>
+                    </div>
+                }
+            </div>
+
+            <div class="detail-content">
+                <div class="detail-header">
+                    <h1>@activity.Name</h1>
+                    @if (!string.IsNullOrEmpty(activity.Category))
+                    {
+                        <span class="detail-category">@activity.Category</span>
+                    }
+                </div>
+
+                <div class="detail-rating">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        var starIndex = i;
+                        <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                    }
+                    <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                </div>
+
+                <div class="detail-info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Cost</span>
+                        <span class="info-value">@(activity.Cost == 0 ? "Free" : $"${activity.Cost:F2}")</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">City</span>
+                        <span class="info-value">@activity.City</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Distance</span>
+                        <span class="info-value">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Date & Time</span>
+                        <span class="info-value">@activity.Activitytime.ToString("MMM d, yyyy h:mm tt")</span>
+                    </div>
+                </div>
+
+                <div class="age-range-banner">
+                    Ideal for ages @activity.MinAge - @activity.MaxAge
+                </div>
+
+                <div class="detail-description">
+                    <h3>About this Activity</h3>
+                    <p>@(string.IsNullOrEmpty(activity.Description) ? "No description available." : activity.Description)</p>
+                </div>
+
+                <div class="detail-location">
+                    <h3>Location</h3>
+                    <p>@activity.City</p>
+                    <p class="coords">@activity.Latitude.ToString("0.0000"), @activity.Longitude.ToString("0.0000")</p>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Activity? activity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        activity = await ActivityService.GetActivityAsync(Id);
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/activities");
+    }
+}

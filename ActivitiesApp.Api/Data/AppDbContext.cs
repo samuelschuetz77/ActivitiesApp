@@ -1,7 +1,7 @@
-using ActivitiesApp.Shared.Models;
+using ActivitiesApp.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace ActivitiesApp.Shared.Data
+namespace ActivitiesApp.Api.Data
 {
     public class AppDbContext : DbContext
     {
@@ -56,6 +56,22 @@ namespace ActivitiesApp.Shared.Data
             modelBuilder.Entity<Activity>()
                 .Property(a => a.MaxAge)
                 .ToJsonProperty("maxAge");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.Category)
+                .ToJsonProperty("category");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.ImageUrl)
+                .ToJsonProperty("imageUrl");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.PlaceId)
+                .ToJsonProperty("placeId");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.Rating)
+                .ToJsonProperty("rating");
         }
     }
 }

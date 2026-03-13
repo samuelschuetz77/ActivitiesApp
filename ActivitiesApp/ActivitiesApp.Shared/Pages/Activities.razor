@@ -1,7 +1,325 @@
-﻿@page "/activities"
+@page "/activities"
+@using ActivitiesApp.Shared.Models
+@using ActivitiesApp.Shared.Services
+@using Microsoft.JSInterop
+@inject IActivityService ActivityService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-<h3>Activities</h3>
+<div class="activities-page">
+    <!-- Search + Location Row -->
+    <div class="search-row">
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="Search activities..."
+                   @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
+        </div>
+        <div class="location-icon-wrapper">
+            <button class="location-btn @(hasLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="10" r="3"/>
+                    <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 11.5 7.35 11.76a1 1 0 0 0 1.3 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8z"/>
+                </svg>
+            </button>
+            @if (showLocationPopup)
+            {
+                <div class="location-popup">
+                    @if (hasLocation)
+                    {
+                        <div class="location-popup-content">
+                            @if (!string.IsNullOrEmpty(userAddress))
+                            {
+                                <p class="location-address">@userAddress</p>
+                            }
+                            else
+                            {
+                                <p class="location-address loading-text">Looking up address...</p>
+                            }
+                            <p class="location-coords">@userLat.ToString("0.0000"), @userLng.ToString("0.0000")</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="location-address">Location not available</p>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-item">
+            <label>Radius</label>
+            <select class="filter-select" @bind="selectedRadius" @bind:after="OnRadiusChanged">
+                <option value="5">5 mi</option>
+                <option value="10">10 mi</option>
+                <option value="25">25 mi</option>
+                <option value="50">50 mi</option>
+            </select>
+        </div>
+
+        <div class="filter-item">
+            <label>Cost</label>
+            <select class="filter-select" @bind="selectedCost" @bind:after="ApplyFilters">
+                <option value="">Any</option>
+                <option value="free">Free</option>
+                <option value="$">$ (Under $15)</option>
+                <option value="$$">$$ ($15-$50)</option>
+                <option value="$$$">$$$ ($50+)</option>
+            </select>
+        </div>
+
+        <div class="filter-item">
+            <label>Category</label>
+            <select class="filter-select" @bind="selectedCategory" @bind:after="ApplyFilters">
+                <option value="">All</option>
+                <option value="Outdoors">Outdoors</option>
+                <option value="Sports">Sports</option>
+                <option value="Arts">Arts</option>
+                <option value="Food">Food</option>
+                <option value="Music">Music</option>
+                <option value="Social">Social</option>
+                <option value="Education">Education</option>
+            </select>
+        </div>
+
+        <div class="filter-item">
+            <label>Age Range</label>
+            <select class="filter-select" @bind="selectedAgeRange" @bind:after="ApplyFilters">
+                <option value="">Any</option>
+                <option value="0-12">Kids (0-12)</option>
+                <option value="13-17">Teens (13-17)</option>
+                <option value="18-25">Young Adults (18-25)</option>
+                <option value="26-40">Adults (26-40)</option>
+                <option value="41-65">Middle Age (41-65)</option>
+                <option value="65-100">Seniors (65+)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Status -->
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="loading">@statusMessage</div>
+    }
+
+    <!-- Activity Cards Grid -->
+    @if (filteredActivities == null && string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="loading">Loading activities...</div>
+    }
+    else if (filteredActivities != null && !filteredActivities.Any())
+    {
+        <div class="no-results">No activities found matching your filters.</div>
+    }
+    else if (filteredActivities != null)
+    {
+        <div class="cards-grid">
+            @foreach (var activity in filteredActivities)
+            {
+                <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
+                    <div class="card-image">
+                        @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                        {
+                            <img src="@activity.ImageUrl" alt="@activity.Name" />
+                        }
+                        else
+                        {
+                            <div class="image-placeholder">
+                                <span>No Image</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(activity.Category))
+                        {
+                            <span class="card-category-badge">@activity.Category</span>
+                        }
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">@activity.Name</h3>
+                        <div class="card-rating">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                var starIndex = i;
+                                <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                            }
+                            <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                        </div>
+                        <div class="card-details">
+                            <span class="card-cost">@FormatCost(activity.Cost)</span>
+                            <span class="card-distance">@GetDistance(activity) mi</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
 
 @code {
+    private List<Activity>? allActivities;
+    private List<Activity>? filteredActivities;
 
+    private string searchText = "";
+    private int selectedRadius = 10;
+    private string selectedCost = "";
+    private string selectedCategory = "";
+    private string selectedAgeRange = "";
+    private string? statusMessage;
+
+    private double userLat;
+    private double userLng;
+    private bool hasLocation;
+    private bool showLocationPopup;
+    private string? userAddress;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await GetLocationAndDiscover();
+        }
+    }
+
+    private async Task GetLocationAndDiscover()
+    {
+        statusMessage = "Getting your location...";
+        StateHasChanged();
+
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]>("getUserLocation");
+            userLat = coords[0];
+            userLng = coords[1];
+            hasLocation = true;
+
+            await DiscoverNearby();
+        }
+        catch
+        {
+            statusMessage = "Could not get location. Loading all activities...";
+            StateHasChanged();
+
+            allActivities = await ActivityService.ListActivitiesAsync();
+            statusMessage = null;
+            ApplyFilters();
+        }
+    }
+
+    private async Task DiscoverNearby()
+    {
+        statusMessage = "Discovering activities nearby...";
+        StateHasChanged();
+
+        var radiusMeters = (int)(selectedRadius * 1609.34); // miles to meters
+        allActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
+
+        statusMessage = null;
+        ApplyFilters();
+    }
+
+    private async Task OnRadiusChanged()
+    {
+        if (hasLocation)
+        {
+            await DiscoverNearby();
+        }
+        else
+        {
+            ApplyFilters();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (allActivities == null) return;
+
+        var query = allActivities.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var term = searchText.Trim();
+            query = query.Where(a =>
+                (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrEmpty(selectedCost))
+        {
+            query = selectedCost switch
+            {
+                "free" => query.Where(a => a.Cost == 0),
+                "$" => query.Where(a => a.Cost >= 0 && a.Cost < 15),
+                "$$" => query.Where(a => a.Cost >= 15 && a.Cost <= 50),
+                "$$$" => query.Where(a => a.Cost > 50),
+                _ => query
+            };
+        }
+
+        if (!string.IsNullOrEmpty(selectedCategory))
+        {
+            query = query.Where(a =>
+                string.Equals(a.Category, selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(selectedAgeRange))
+        {
+            var parts = selectedAgeRange.Split('-');
+            if (parts.Length == 2 && int.TryParse(parts[0], out var minAge) && int.TryParse(parts[1], out var maxAge))
+            {
+                query = query.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
+            }
+        }
+
+        filteredActivities = query.ToList();
+        StateHasChanged();
+    }
+
+    private void ViewDetail(Guid id)
+    {
+        Navigation.NavigateTo($"/activity/{id}");
+    }
+
+    private string FormatCost(double cost)
+    {
+        if (cost == 0) return "Free";
+        return $"${cost:F2}";
+    }
+
+    private string GetDistance(Activity activity)
+    {
+        if (!hasLocation) return "?";
+
+        // Haversine formula
+        const double R = 3958.8; // Earth radius in miles
+        var dLat = ToRad(activity.Latitude - userLat);
+        var dLng = ToRad(activity.Longitude - userLng);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRad(userLat)) * Math.Cos(ToRad(activity.Latitude)) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return (R * c).ToString("0.1");
+    }
+
+    private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    private async Task ToggleLocationPopup()
+    {
+        showLocationPopup = !showLocationPopup;
+
+        if (showLocationPopup && hasLocation && string.IsNullOrEmpty(userAddress))
+        {
+            try
+            {
+                userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
+                StateHasChanged();
+            }
+            catch
+            {
+                userAddress = "Address unavailable";
+            }
+        }
+    }
 }

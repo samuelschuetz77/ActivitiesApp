@@ -1,7 +1,11 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.ActivitiesApp>("activitiesapp");
+var api = builder.AddProject<Projects.ActivitiesApp_Api>("activitiesapp-api");
 
-builder.AddProject<Projects.ActivitiesApp_Web>("activitiesapp-web");
+builder.AddProject<Projects.ActivitiesApp>("activitiesapp")
+    .WithReference(api);
+
+builder.AddProject<Projects.ActivitiesApp_Web>("activitiesapp-web")
+    .WithReference(api);
 
 builder.Build().Run();

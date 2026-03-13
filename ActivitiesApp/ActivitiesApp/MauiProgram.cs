@@ -1,9 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using ActivitiesApp.Shared.Services;
-using ActivitiesApp.Shared.Data;
 using ActivitiesApp.Services;
+using ActivitiesApp.Protos;
+using Grpc.Net.Client;
 
 namespace ActivitiesApp;
 
@@ -24,13 +24,15 @@ public static class MauiProgram
         // Add device-specific services used by the ActivitiesApp.Shared project
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-        // Add Cosmos DB context — reads credentials from user secrets
-        builder.Services.AddDbContext<AppDbContext>(options =>
-            options.UseCosmos(
-                accountEndpoint: builder.Configuration["CosmosDb:Endpoint"]!,
-                accountKey: builder.Configuration["CosmosDb:Key"]!,
-                databaseName: "ActivitiesDb"
-            ));
+        // Configure gRPC client pointing to the API
+        var apiAddress = builder.Configuration["ApiAddress"] ?? "https://localhost:7051";
+
+        builder.Services.AddSingleton(sp =>
+        {
+            var channel = GrpcChannel.ForAddress(apiAddress);
+            return new ActivityService.ActivityServiceClient(channel);
+        });
+        builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
 
         builder.Services.AddMauiBlazorWebView();
 

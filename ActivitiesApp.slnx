@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="ActivitiesApp.Api/ActivitiesApp.Api.csproj" />
   <Project Path="ActivitiesApp.AppHost/ActivitiesApp.AppHost.csproj" />
   <Project Path="ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj" />
   <Project Path="ActivitiesApp/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj" />

@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ActivitiesApp.Api\ActivitiesApp.Api.csproj" />
     <ProjectReference Include="..\ActivitiesApp\ActivitiesApp.Web\ActivitiesApp.Web.csproj" />
     <ProjectReference Include="..\ActivitiesApp\ActivitiesApp\ActivitiesApp.csproj">
       <SetTargetFramework>TargetFramework=net10.0</SetTargetFramework>

@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+option csharp_namespace = "ActivitiesApp.Protos";
+
+import "google/protobuf/timestamp.proto";
+
+package activities;
+
+service ActivityService {
+  // Existing CRUD
+  rpc CreateActivity (CreateActivityRequest) returns (ActivityResponse);
+  rpc GetActivity (GetActivityRequest) returns (ActivityResponse);
+  rpc ListActivities (ListActivitiesRequest) returns (stream ActivityResponse);
+
+  // Discover activities near a location — searches Google, syncs to DB, streams results
+  rpc DiscoverActivities (DiscoverActivitiesRequest) returns (stream ActivityResponse);
+
+  // Google Maps - search nearby places and stream results back
+  rpc SearchNearbyPlaces (SearchNearbyRequest) returns (stream PlaceResult);
+
+  // Google Maps - get full details for a specific place
+  rpc GetPlaceDetails (GetPlaceDetailsRequest) returns (PlaceDetailsResponse);
+
+  // Reverse geocode coordinates to an address
+  rpc ReverseGeocode (ReverseGeocodeRequest) returns (ReverseGeocodeResponse);
+}
+
+// ─── Activity CRUD Messages ───
+
+message CreateActivityRequest {
+  string name = 1;
+  string city = 2;
+  string description = 3;
+  double cost = 4;
+  google.protobuf.Timestamp activity_time = 5;
+  double latitude = 6;
+  double longitude = 7;
+  int32 min_age = 8;
+  int32 max_age = 9;
+  string category = 10;
+  string image_url = 11;
+}
+
+message GetActivityRequest {
+  string id = 1;
+}
+
+message ListActivitiesRequest {
+}
+
+message ActivityResponse {
+  string id = 1;
+  string name = 2;
+  string city = 3;
+  string description = 4;
+  double cost = 5;
+  google.protobuf.Timestamp activity_time = 6;
+  double latitude = 7;
+  double longitude = 8;
+  int32 min_age = 9;
+  int32 max_age = 10;
+  string category = 11;
+  string image_url = 12;
+  string place_id = 13;
+  double rating = 14;
+}
+
+message DiscoverActivitiesRequest {
+  double latitude = 1;
+  double longitude = 2;
+  int32 radius_meters = 3;       // e.g. 8000 for ~5 miles
+}
+
+// ─── Google Maps Messages ───
+
+message SearchNearbyRequest {
+  double latitude = 1;
+  double longitude = 2;
+  int32 radius_meters = 3;       // e.g. 5000 for 5km
+  string type = 4;               // Google place type: "restaurant", "park", "museum", etc.
+  string keyword = 5;            // optional keyword filter
+}
+
+message PlaceResult {
+  string place_id = 1;
+  string name = 2;
+  string vicinity = 3;           // address/area description
+  double latitude = 4;
+  double longitude = 5;
+  double rating = 6;             // Google rating 1.0 - 5.0
+  int32 user_ratings_total = 7;
+  string photo_url = 8;          // resolved photo URL (served via our API)
+  bool is_open_now = 9;
+  repeated string types = 10;    // e.g. ["park", "point_of_interest"]
+  int32 price_level = 11;        // 0-4, Google's price indicator
+}
+
+message GetPlaceDetailsRequest {
+  string place_id = 1;
+}
+
+message PlaceDetailsResponse {
+  string place_id = 1;
+  string name = 2;
+  string formatted_address = 3;
+  string formatted_phone = 4;
+  string website = 5;
+  double rating = 6;
+  int32 user_ratings_total = 7;
+  double latitude = 8;
+  double longitude = 9;
+  repeated string photo_urls = 10;   // all available photo URLs
+  repeated PlaceReview reviews = 11;
+  string opening_hours_summary = 12;
+  int32 price_level = 13;
+  repeated string types = 14;
+}
+
+message PlaceReview {
+  string author_name = 1;
+  double rating = 2;
+  string text = 3;
+  string relative_time = 4;      // e.g. "2 weeks ago"
+}
+
+message ReverseGeocodeRequest {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+message ReverseGeocodeResponse {
+  string formatted_address = 1;
+}

@@ -1,8 +1,8 @@
 using ActivitiesApp.Web.Components;
 using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
-using ActivitiesApp.Shared.Data;
-using Microsoft.EntityFrameworkCore;
+using ActivitiesApp.Protos;
+using Grpc.Net.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,22 +15,19 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// Add Cosmos DB context
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseCosmos(
-        accountEndpoint: builder.Configuration["CosmosDb:Endpoint"] ?? "https://localhost:8081/",
-        accountKey: builder.Configuration["CosmosDb:Key"] ?? "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
-        databaseName: "ActivitiesDb"
-    ));
+// Configure gRPC client pointing to the API
+var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
+    ?? builder.Configuration["ApiAddress"]
+    ?? "https://localhost:7051";
+
+builder.Services.AddSingleton(sp =>
+{
+    var channel = GrpcChannel.ForAddress(apiAddress);
+    return new ActivityService.ActivityServiceClient(channel);
+});
+builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
 
 var app = builder.Build();
-
-// Ensure Cosmos DB is created
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await context.Database.EnsureCreatedAsync(); // Must use async for Cosmos DB
-}
 
 app.MapDefaultEndpoints();
 
@@ -38,7 +35,6 @@ app.MapDefaultEndpoints();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
