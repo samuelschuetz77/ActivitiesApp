@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>3679d028-3fc0-416e-8ae1-9ef6cb352d0d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ActivitiesApp.ServiceDefaults\ActivitiesApp.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\ActivitiesApp.Shared\ActivitiesApp.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

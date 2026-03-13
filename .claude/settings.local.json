@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/Samuel/Desktop/Mobile_Cloud/ActivitiesApp -type f -name \"*.cs\" | xargs grep -l \"Migration\\\\|DbContextOptions\\\\|Repository\\\\|Service\" | head -20)",
+      "Bash(find /c/Users/Samuel/Desktop/Mobile_Cloud/ActivitiesApp -type f -name \"*.cs\" | xargs grep -l \"IActivityService\\\\|ActivityRepository\\\\|ActivityService\" 2>/dev/null | head -10)"
+    ]
+  }
+}

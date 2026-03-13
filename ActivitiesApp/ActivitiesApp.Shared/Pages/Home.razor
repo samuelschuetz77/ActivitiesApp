@@ -1,0 +1,87 @@
+﻿@page "/"
+@using ActivitiesApp.Shared.Services
+@using ActivitiesApp.Shared.Models
+@using ActivitiesApp.Shared.Data
+@inject IFormFactor FormFactor
+@inject AppDbContext DbContext
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app running on <em>@factor</em> using <em>@platform</em>.
+
+<hr />
+
+<h2>Create a New Activity</h2>
+
+<EditForm Model="@newActivity" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label>Name:</label>
+        <InputText @bind-Value="newActivity.Name" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>City:</label>
+        <InputText @bind-Value="newActivity.City" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Description:</label>
+        <InputTextArea @bind-Value="newActivity.Description" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Cost:</label>
+        <InputNumber @bind-Value="newActivity.Cost" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Activity Time:</label>
+        <InputDate @bind-Value="newActivity.Activitytime" Type="InputDateType.DateTimeLocal" class="form-control" />
+    </div>
+
+    <div class="mb-3 row">
+        <div class="col">
+            <label>Min Age:</label>
+            <InputNumber @bind-Value="newActivity.MinAge" class="form-control" />
+        </div>
+        <div class="col">
+            <label>Max Age:</label>
+            <InputNumber @bind-Value="newActivity.MaxAge" class="form-control" />
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Create Activity</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success mt-3">@successMessage</div>
+}
+
+@code {
+    private string factor => FormFactor.GetFormFactor();
+    private string platform => FormFactor.GetPlatform();
+
+    private Activity newActivity { get; set; } = new Activity() { Activitytime = DateTime.Now };
+    private string? successMessage;
+
+    private async Task HandleValidSubmit()
+    {
+        if (newActivity.Id == Guid.Empty)
+        {
+            newActivity.Id = Guid.NewGuid();
+        }
+
+        DbContext.Activities.Add(newActivity);
+        await DbContext.SaveChangesAsync();
+        successMessage = $"Activity '{newActivity.Name}' in '{newActivity.City}' saved successfully!";
+
+        // Reset the form
+        newActivity = new Activity() { Activitytime = DateTime.Now };
+    }
+}
