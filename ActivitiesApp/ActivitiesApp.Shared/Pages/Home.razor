@@ -1,105 +1,288 @@
 @page "/"
 @using ActivitiesApp.Shared.Services
 @using ActivitiesApp.Shared.Models
-@inject IFormFactor FormFactor
+@using Microsoft.JSInterop
 @inject IActivityService ActivityService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app running on <em>@factor</em> using <em>@platform</em>.
-
-<hr />
-
-<h2>Create a New Activity</h2>
-
-<EditForm Model="@newActivity" OnValidSubmit="HandleValidSubmit">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
-
-    <div class="mb-3">
-        <label>Name:</label>
-        <InputText @bind-Value="newActivity.Name" class="form-control" />
-    </div>
-
-    <div class="mb-3">
-        <label>City:</label>
-        <InputText @bind-Value="newActivity.City" class="form-control" />
-    </div>
-
-    <div class="mb-3">
-        <label>Description:</label>
-        <InputTextArea @bind-Value="newActivity.Description" class="form-control" />
-    </div>
-
-    <div class="mb-3">
-        <label>Cost:</label>
-        <InputNumber @bind-Value="newActivity.Cost" class="form-control" />
-    </div>
-
-    <div class="mb-3">
-        <label>Activity Time:</label>
-        <InputDate @bind-Value="newActivity.Activitytime" Type="InputDateType.DateTimeLocal" class="form-control" />
-    </div>
-
-    <div class="mb-3 row">
-        <div class="col">
-            <label>Latitude:</label>
-            <InputNumber @bind-Value="newActivity.Latitude" class="form-control" />
-        </div>
-        <div class="col">
-            <label>Longitude:</label>
-            <InputNumber @bind-Value="newActivity.Longitude" class="form-control" />
+<div class="home-page">
+    <!-- Location Row -->
+    <div class="home-location-row">
+        <h1 class="home-title">Home</h1>
+        <div class="location-icon-wrapper">
+            <button class="location-btn @(hasLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="10" r="3"/>
+                    <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 11.5 7.35 11.76a1 1 0 0 0 1.3 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8z"/>
+                </svg>
+            </button>
+            @if (showLocationPopup)
+            {
+                <div class="location-popup">
+                    @if (hasLocation)
+                    {
+                        <div class="location-popup-content">
+                            @if (!string.IsNullOrEmpty(userAddress))
+                            {
+                                <p class="location-address">@userAddress</p>
+                            }
+                            else
+                            {
+                                <p class="location-address loading-text">Looking up address...</p>
+                            }
+                            <p class="location-coords">@userLat.ToString("0.0000"), @userLng.ToString("0.0000")</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="location-address">Location not available</p>
+                    }
+                </div>
+            }
         </div>
     </div>
 
-    <div class="mb-3 row">
-        <div class="col">
-            <label>Min Age:</label>
-            <InputNumber @bind-Value="newActivity.MinAge" class="form-control" />
+    <!-- Recently Viewed Section -->
+    @if (recentActivities != null && recentActivities.Any())
+    {
+        <div class="home-section">
+            <h2 class="home-section-title">Recently Viewed</h2>
+            <div class="cards-grid">
+                @foreach (var activity in recentActivities)
+                {
+                    <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
+                        <div class="card-image">
+                            @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                            {
+                                <img src="@activity.ImageUrl" alt="@activity.Name" />
+                            }
+                            else
+                            {
+                                <div class="image-placeholder">
+                                    <span>No Image</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(activity.Category))
+                            {
+                                <span class="card-category-badge">@activity.Category</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <h3 class="card-title">@activity.Name</h3>
+                            <div class="card-rating">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    var starIndex = i;
+                                    <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                                }
+                                <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                            </div>
+                            <div class="card-details">
+                                <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                <span class="card-distance">@GetDistance(activity) mi</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
-        <div class="col">
-            <label>Max Age:</label>
-            <InputNumber @bind-Value="newActivity.MaxAge" class="form-control" />
-        </div>
+    }
+
+    <!-- Activities Near You Section -->
+    <div class="home-section">
+        <h2 class="home-section-title">Activities Near You</h2>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="loading">@statusMessage</div>
+        }
+        else if (nearbyActivities == null)
+        {
+            <div class="loading">Loading activities...</div>
+        }
+        else if (!nearbyActivities.Any())
+        {
+            <div class="no-results">No nearby activities found.</div>
+        }
+        else
+        {
+            <div class="cards-grid">
+                @foreach (var activity in nearbyActivities.Take(10))
+                {
+                    <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
+                        <div class="card-image">
+                            @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                            {
+                                <img src="@activity.ImageUrl" alt="@activity.Name" />
+                            }
+                            else
+                            {
+                                <div class="image-placeholder">
+                                    <span>No Image</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(activity.Category))
+                            {
+                                <span class="card-category-badge">@activity.Category</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <h3 class="card-title">@activity.Name</h3>
+                            <div class="card-rating">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    var starIndex = i;
+                                    <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                                }
+                                <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                            </div>
+                            <div class="card-details">
+                                <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                <span class="card-distance">@GetDistance(activity) mi</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="see-more-container">
+                <button class="btn-see-more" @onclick="GoToActivities">See More</button>
+            </div>
+        }
     </div>
-
-    <div class="mb-3">
-        <label>Category:</label>
-        <InputSelect @bind-Value="newActivity.Category" class="form-control">
-            <option value="">Select a category</option>
-            <option value="Outdoors">Outdoors</option>
-            <option value="Sports">Sports</option>
-            <option value="Arts">Arts</option>
-            <option value="Food">Food</option>
-            <option value="Music">Music</option>
-            <option value="Social">Social</option>
-            <option value="Education">Education</option>
-        </InputSelect>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Create Activity</button>
-</EditForm>
-
-@if (!string.IsNullOrEmpty(successMessage))
-{
-    <div class="alert alert-success mt-3">@successMessage</div>
-}
+</div>
 
 @code {
-    private string factor => FormFactor.GetFormFactor();
-    private string platform => FormFactor.GetPlatform();
+    private List<Activity>? recentActivities;
+    private List<Activity>? nearbyActivities;
+    private string? statusMessage;
 
-    private Activity newActivity { get; set; } = new Activity() { Activitytime = DateTime.UtcNow };
-    private string? successMessage;
+    private double userLat;
+    private double userLng;
+    private bool hasLocation;
+    private bool showLocationPopup;
+    private string? userAddress;
 
-    private async Task HandleValidSubmit()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var created = await ActivityService.CreateActivityAsync(newActivity);
-        successMessage = $"Activity '{created.Name}' in '{created.City}' saved successfully!";
+        if (firstRender)
+        {
+            await LoadRecentlyViewed();
+            await GetLocationAndDiscover();
+        }
+    }
 
-        // Reset the form
-        newActivity = new Activity() { Activitytime = DateTime.UtcNow };
+    private async Task LoadRecentlyViewed()
+    {
+        try
+        {
+            var ids = await JS.InvokeAsync<string[]>("getRecentlyViewed");
+            if (ids != null && ids.Length > 0)
+            {
+                var list = new List<Activity>();
+                foreach (var idStr in ids)
+                {
+                    if (Guid.TryParse(idStr, out var id))
+                    {
+                        var activity = await ActivityService.GetActivityAsync(id);
+                        if (activity != null)
+                        {
+                            list.Add(activity);
+                        }
+                    }
+                }
+                recentActivities = list;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // No recently viewed items
+        }
+    }
+
+    private async Task GetLocationAndDiscover()
+    {
+        statusMessage = "Getting your location...";
+        StateHasChanged();
+
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]>("getUserLocation");
+            userLat = coords[0];
+            userLng = coords[1];
+            hasLocation = true;
+
+            statusMessage = "Discovering activities nearby...";
+            StateHasChanged();
+
+            var radiusMeters = (int)(10 * 1609.34); // 10 miles
+            nearbyActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
+            statusMessage = null;
+            StateHasChanged();
+        }
+        catch
+        {
+            statusMessage = "Could not get location. Loading all activities...";
+            StateHasChanged();
+
+            nearbyActivities = await ActivityService.ListActivitiesAsync();
+            statusMessage = null;
+            StateHasChanged();
+        }
+    }
+
+    private void ViewDetail(Guid id)
+    {
+        Navigation.NavigateTo($"/activity/{id}");
+    }
+
+    private void GoToActivities()
+    {
+        Navigation.NavigateTo("/activities");
+    }
+
+    private string FormatCost(double cost)
+    {
+        if (cost == 0) return "Free";
+        return $"${cost:F2}";
+    }
+
+    private string GetDistance(Activity activity)
+    {
+        if (!hasLocation) return "?";
+
+        const double R = 3958.8;
+        var dLat = ToRad(activity.Latitude - userLat);
+        var dLng = ToRad(activity.Longitude - userLng);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRad(userLat)) * Math.Cos(ToRad(activity.Latitude)) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return (R * c).ToString("0.1");
+    }
+
+    private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    private async Task ToggleLocationPopup()
+    {
+        showLocationPopup = !showLocationPopup;
+
+        if (showLocationPopup && hasLocation && string.IsNullOrEmpty(userAddress))
+        {
+            try
+            {
+                userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
+                StateHasChanged();
+            }
+            catch
+            {
+                userAddress = "Address unavailable";
+            }
+        }
     }
 }

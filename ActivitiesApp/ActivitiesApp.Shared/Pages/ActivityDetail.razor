@@ -1,8 +1,10 @@
 @page "/activity/{Id:guid}"
 @using ActivitiesApp.Shared.Models
 @using ActivitiesApp.Shared.Services
+@using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <div class="detail-page">
     @if (activity == null)
@@ -92,6 +94,14 @@
     protected override async Task OnInitializedAsync()
     {
         activity = await ActivityService.GetActivityAsync(Id);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("addRecentlyViewed", Id.ToString());
+        }
     }
 
     private void GoBack()

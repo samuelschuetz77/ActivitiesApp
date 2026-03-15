@@ -34,6 +34,18 @@
                 );
             });
         };
+
+        window.addRecentlyViewed = (id) => {
+            let items = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+            items = items.filter(i => i !== id);
+            items.unshift(id);
+            if (items.length > 3) items = items.slice(0, 3);
+            localStorage.setItem('recentlyViewed', JSON.stringify(items));
+        };
+
+        window.getRecentlyViewed = () => {
+            return JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+        };
     </script>
 
 </body>

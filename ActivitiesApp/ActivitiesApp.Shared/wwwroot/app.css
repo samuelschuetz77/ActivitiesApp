@@ -59,6 +59,68 @@ h1:focus {
     text-align: start;
 }
 
+/* ========== Home Page ========== */
+
+.home-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.home-location-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.home-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+    color: #222;
+}
+
+.home-section {
+    margin-bottom: 2rem;
+}
+
+.home-section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 0.85rem 0;
+}
+
+.see-more-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.btn-see-more {
+    padding: 0.75rem 2.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #1b6ec2 0%, #2a9d4e 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.btn-see-more:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}
+
+/* ========== Create Activity Page ========== */
+
+.create-activity-page {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
 /* ========== Activities Page ========== */
 
 .activities-page {
