@@ -5,6 +5,8 @@
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject LocationService LocationService
+@implements IDisposable
 
 <PageTitle>Home</PageTitle>
 
@@ -161,19 +163,32 @@
     private List<Activity>? nearbyActivities;
     private string? statusMessage;
 
-    private double userLat;
-    private double userLng;
-    private bool hasLocation;
     private bool showLocationPopup;
     private string? userAddress;
+
+    private bool hasLocation => LocationService.HasLocation;
+    private double userLat => LocationService.Latitude;
+    private double userLng => LocationService.Longitude;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            LocationService.LocationChanged += OnLocationChanged;
+            LocationService.StartTracking(JS);
+
             await LoadRecentlyViewed();
-            await GetLocationAndDiscover();
+            await LoadNearbyActivities();
         }
+    }
+
+    private async void OnLocationChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadNearbyActivities();
+            StateHasChanged();
+        });
     }
 
     private async Task LoadRecentlyViewed()
@@ -205,18 +220,10 @@
         }
     }
 
-    private async Task GetLocationAndDiscover()
+    private async Task LoadNearbyActivities()
     {
-        statusMessage = "Getting your location...";
-        StateHasChanged();
-
-        try
+        if (hasLocation)
         {
-            var coords = await JS.InvokeAsync<double[]>("getUserLocation");
-            userLat = coords[0];
-            userLng = coords[1];
-            hasLocation = true;
-
             statusMessage = "Discovering activities nearby...";
             StateHasChanged();
 
@@ -225,11 +232,8 @@
             statusMessage = null;
             StateHasChanged();
         }
-        catch
+        else
         {
-            statusMessage = "Could not get location. Loading all activities...";
-            StateHasChanged();
-
             nearbyActivities = await ActivityService.ListActivitiesAsync();
             statusMessage = null;
             StateHasChanged();
@@ -284,5 +288,10 @@
                 userAddress = "Address unavailable";
             }
         }
+    }
+
+    public void Dispose()
+    {
+        LocationService.LocationChanged -= OnLocationChanged;
     }
 }

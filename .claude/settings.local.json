@@ -12,7 +12,9 @@
       "Bash(cd \"C:\\\\Users\\\\Samuel\\\\Desktop\\\\Mobile_Cloud\\\\ActivitiesApp\" && dotnet build ActivitiesApp/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj 2>&1 | grep -E \"\\(error|Error|succeeded\\)\" | head -5 && echo \"=== MAUI ===\" && dotnet build ActivitiesApp/ActivitiesApp/ActivitiesApp.csproj -f net10.0-windows10.0.19041.0 2>&1 | grep -E \"\\(error|Error|succeeded\\)\" | head -5)",
       "Bash(cd \"C:\\\\Users\\\\Samuel\\\\Desktop\\\\Mobile_Cloud\\\\ActivitiesApp\" && dotnet build ActivitiesApp.Api/ActivitiesApp.Api.csproj 2>&1 | grep -E \"\\(error|Error|succeeded\\)\" | head -5)",
       "Bash(find:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(dotnet build:*)"
     ]
   }
 }

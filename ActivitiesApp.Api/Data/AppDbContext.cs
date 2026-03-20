@@ -15,7 +15,8 @@ namespace ActivitiesApp.Api.Data
         {
             modelBuilder.Entity<Activity>()
                 .ToContainer("Activities")
-                .HasPartitionKey(a => a.City);
+                .HasPartitionKey(a => a.City)
+                .UseETagConcurrency();
 
             modelBuilder.Entity<Activity>()
                 .Property(a => a.Id)
@@ -72,6 +73,29 @@ namespace ActivitiesApp.Api.Data
             modelBuilder.Entity<Activity>()
                 .Property(a => a.Rating)
                 .ToJsonProperty("rating");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.UpdatedAt)
+                .ToJsonProperty("updatedAt");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.IsDeleted)
+                .ToJsonProperty("isDeleted");
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            foreach (var entry in ChangeTracker.Entries<Activity>())
+            {
+                if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+                {
+                    entry.Entity.UpdatedAt = now;
+                }
+            }
+
+            return await base.SaveChangesAsync(cancellationToken);
         }
     }
 }
