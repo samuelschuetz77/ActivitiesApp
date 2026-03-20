@@ -5,6 +5,8 @@
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject LocationService LocationService
+@implements IDisposable
 
 <div class="activities-page">
     <!-- Search + Location Row -->
@@ -167,39 +169,40 @@
     private string selectedAgeRange = "";
     private string? statusMessage;
 
-    private double userLat;
-    private double userLng;
-    private bool hasLocation;
     private bool showLocationPopup;
     private string? userAddress;
+
+    private bool hasLocation => LocationService.HasLocation;
+    private double userLat => LocationService.Latitude;
+    private double userLng => LocationService.Longitude;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await GetLocationAndDiscover();
+            LocationService.LocationChanged += OnLocationChanged;
+            LocationService.StartTracking(JS);
+
+            await LoadActivities();
         }
     }
 
-    private async Task GetLocationAndDiscover()
+    private async void OnLocationChanged()
     {
-        statusMessage = "Getting your location...";
-        StateHasChanged();
-
-        try
+        await InvokeAsync(async () =>
         {
-            var coords = await JS.InvokeAsync<double[]>("getUserLocation");
-            userLat = coords[0];
-            userLng = coords[1];
-            hasLocation = true;
+            await LoadActivities();
+        });
+    }
 
+    private async Task LoadActivities()
+    {
+        if (hasLocation)
+        {
             await DiscoverNearby();
         }
-        catch
+        else
         {
-            statusMessage = "Could not get location. Loading all activities...";
-            StateHasChanged();
-
             allActivities = await ActivityService.ListActivitiesAsync();
             statusMessage = null;
             ApplyFilters();
@@ -292,8 +295,7 @@
     {
         if (!hasLocation) return "?";
 
-        // Haversine formula
-        const double R = 3958.8; // Earth radius in miles
+        const double R = 3958.8;
         var dLat = ToRad(activity.Latitude - userLat);
         var dLng = ToRad(activity.Longitude - userLng);
         var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
@@ -321,5 +323,10 @@
                 userAddress = "Address unavailable";
             }
         }
+    }
+
+    public void Dispose()
+    {
+        LocationService.LocationChanged -= OnLocationChanged;
     }
 }

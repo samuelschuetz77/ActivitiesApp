@@ -18,5 +18,7 @@ namespace ActivitiesApp.Shared.Models
         public string? ImageUrl { get; set; }
         public string? PlaceId { get; set; }
         public double Rating { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+        public bool IsDeleted { get; set; }
     }
 }

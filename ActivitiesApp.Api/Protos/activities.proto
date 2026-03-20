@@ -23,6 +23,12 @@ service ActivityService {
 
   // Reverse geocode coordinates to an address
   rpc ReverseGeocode (ReverseGeocodeRequest) returns (ReverseGeocodeResponse);
+
+  // Delta sync — pull changes since a timestamp
+  rpc PullChanges (PullChangesRequest) returns (stream ActivitySyncItem);
+
+  // Delta sync — push local changes to server
+  rpc PushChanges (stream ActivitySyncItem) returns (PushChangesResponse);
 }
 
 // ─── Activity CRUD Messages ───
@@ -130,4 +136,37 @@ message ReverseGeocodeRequest {
 
 message ReverseGeocodeResponse {
   string formatted_address = 1;
+}
+
+// ─── Delta Sync Messages ───
+
+message PullChangesRequest {
+  google.protobuf.Timestamp since = 1;  // pull all changes after this timestamp
+}
+
+message ActivitySyncItem {
+  string id = 1;
+  string name = 2;
+  string city = 3;
+  string description = 4;
+  double cost = 5;
+  google.protobuf.Timestamp activity_time = 6;
+  double latitude = 7;
+  double longitude = 8;
+  int32 min_age = 9;
+  int32 max_age = 10;
+  string category = 11;
+  string image_url = 12;
+  string place_id = 13;
+  double rating = 14;
+  bool is_deleted = 15;
+  google.protobuf.Timestamp updated_at = 16;
+  string version = 17;  // ETag for optimistic concurrency
+}
+
+message PushChangesResponse {
+  repeated ActivitySyncItem resolved_items = 1;  // server versions after conflict resolution
+  int32 created_count = 2;
+  int32 updated_count = 3;
+  int32 conflict_count = 4;
 }

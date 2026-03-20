@@ -69,7 +69,9 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         IServerStreamWriter<ActivityResponse> responseStream,
         ServerCallContext context)
     {
-        var activities = await _db.Activities.ToListAsync();
+        var activities = await _db.Activities
+            .Where(a => !a.IsDeleted)
+            .ToListAsync();
 
         foreach (var activity in activities)
         {
@@ -267,6 +269,95 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         return new ReverseGeocodeResponse { FormattedAddress = address };
     }
 
+    // ─── Delta Sync ───
+
+    public override async Task PullChanges(
+        PullChangesRequest request,
+        IServerStreamWriter<ActivitySyncItem> responseStream,
+        ServerCallContext context)
+    {
+        var since = request.Since?.ToDateTimeOffset() ?? DateTimeOffset.MinValue;
+
+        _logger.LogInformation("PullChanges since {Since}", since);
+
+        var changedActivities = await _db.Activities
+            .Where(a => a.UpdatedAt > since)
+            .ToListAsync();
+
+        foreach (var activity in changedActivities)
+        {
+            if (context.CancellationToken.IsCancellationRequested)
+                break;
+
+            await responseStream.WriteAsync(ToSyncItem(activity));
+        }
+
+        _logger.LogInformation("PullChanges returned {Count} items", changedActivities.Count);
+    }
+
+    public override async Task<PushChangesResponse> PushChanges(
+        IAsyncStreamReader<ActivitySyncItem> requestStream,
+        ServerCallContext context)
+    {
+        var response = new PushChangesResponse();
+        var resolvedItems = new List<ActivitySyncItem>();
+
+        await foreach (var item in requestStream.ReadAllAsync(context.CancellationToken))
+        {
+            if (!Guid.TryParse(item.Id, out var id))
+                continue;
+
+            var existing = await _db.Activities.FirstOrDefaultAsync(a => a.Id == id);
+
+            if (existing == null)
+            {
+                // New activity from client
+                var activity = FromSyncItem(item);
+                _db.Activities.Add(activity);
+                await _db.SaveChangesAsync();
+                resolvedItems.Add(ToSyncItem(activity));
+                response.CreatedCount++;
+            }
+            else
+            {
+                // Server-wins conflict resolution: if server version is newer, return server version
+                var clientUpdatedAt = item.UpdatedAt?.ToDateTimeOffset() ?? DateTimeOffset.MinValue;
+
+                if (clientUpdatedAt >= existing.UpdatedAt)
+                {
+                    // Client is newer or same — apply client changes
+                    existing.Name = item.Name;
+                    existing.City = item.City;
+                    existing.Description = item.Description;
+                    existing.Cost = item.Cost;
+                    existing.Activitytime = item.ActivityTime?.ToDateTime() ?? DateTime.UtcNow;
+                    existing.Latitude = item.Latitude;
+                    existing.Longitude = item.Longitude;
+                    existing.MinAge = item.MinAge;
+                    existing.MaxAge = item.MaxAge;
+                    existing.Category = string.IsNullOrEmpty(item.Category) ? null : item.Category;
+                    existing.ImageUrl = string.IsNullOrEmpty(item.ImageUrl) ? null : item.ImageUrl;
+                    existing.PlaceId = string.IsNullOrEmpty(item.PlaceId) ? null : item.PlaceId;
+                    existing.Rating = item.Rating;
+                    existing.IsDeleted = item.IsDeleted;
+
+                    await _db.SaveChangesAsync();
+                    resolvedItems.Add(ToSyncItem(existing));
+                    response.UpdatedCount++;
+                }
+                else
+                {
+                    // Server is newer — return server version (server-wins)
+                    resolvedItems.Add(ToSyncItem(existing));
+                    response.ConflictCount++;
+                }
+            }
+        }
+
+        response.ResolvedItems.AddRange(resolvedItems);
+        return response;
+    }
+
     // ─── Helpers ───
 
     private static ActivityResponse ToActivityResponse(Activity activity)
@@ -287,6 +378,52 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             ImageUrl = activity.ImageUrl ?? "",
             PlaceId = activity.PlaceId ?? "",
             Rating = activity.Rating
+        };
+    }
+
+    private static ActivitySyncItem ToSyncItem(Activity activity)
+    {
+        return new ActivitySyncItem
+        {
+            Id = activity.Id.ToString(),
+            Name = activity.Name ?? "",
+            City = activity.City ?? "",
+            Description = activity.Description ?? "",
+            Cost = activity.Cost,
+            ActivityTime = Timestamp.FromDateTime(DateTime.SpecifyKind(activity.Activitytime, DateTimeKind.Utc)),
+            Latitude = activity.Latitude,
+            Longitude = activity.Longitude,
+            MinAge = activity.MinAge,
+            MaxAge = activity.MaxAge,
+            Category = activity.Category ?? "",
+            ImageUrl = activity.ImageUrl ?? "",
+            PlaceId = activity.PlaceId ?? "",
+            Rating = activity.Rating,
+            IsDeleted = activity.IsDeleted,
+            UpdatedAt = Timestamp.FromDateTimeOffset(activity.UpdatedAt),
+            Version = ""
+        };
+    }
+
+    private static Activity FromSyncItem(ActivitySyncItem item)
+    {
+        return new Activity
+        {
+            Id = Guid.TryParse(item.Id, out var id) ? id : Guid.NewGuid(),
+            Name = item.Name,
+            City = item.City,
+            Description = item.Description,
+            Cost = item.Cost,
+            Activitytime = item.ActivityTime?.ToDateTime() ?? DateTime.UtcNow,
+            Latitude = item.Latitude,
+            Longitude = item.Longitude,
+            MinAge = item.MinAge,
+            MaxAge = item.MaxAge,
+            Category = string.IsNullOrEmpty(item.Category) ? null : item.Category,
+            ImageUrl = string.IsNullOrEmpty(item.ImageUrl) ? null : item.ImageUrl,
+            PlaceId = string.IsNullOrEmpty(item.PlaceId) ? null : item.PlaceId,
+            Rating = item.Rating,
+            IsDeleted = item.IsDeleted
         };
     }
 }
