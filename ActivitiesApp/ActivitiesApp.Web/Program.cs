@@ -1,6 +1,7 @@
 using ActivitiesApp.Web.Components;
 using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
+using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
 
@@ -26,6 +27,7 @@ builder.Services.AddSingleton(sp =>
     return new ActivityService.ActivityServiceClient(channel);
 });
 builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
+builder.Services.AddSingleton<LocationService>();
 
 var app = builder.Build();
 
