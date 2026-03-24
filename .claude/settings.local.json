@@ -14,7 +14,10 @@
       "Bash(find:*)",
       "Bash(cd:*)",
       "Bash(grep -E \"\\\\.cs$\")",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(git checkout:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet package:*)"
     ]
   }
 }

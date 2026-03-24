@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiervote
+  namespace: cael
+  labels:
+    app: tiervote
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tiervote
+  template:
+    metadata:
+      labels:
+        app: tiervote
+    spec:
+      containers:
+      - name: tiervote
+        image: caelchurch/tiervote:0.0.2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ConnectionStrings__web-db
+          value: Host=postgres;Database=tiervotedb;Username=tiervoteuser;Password=tiervote123
+        - name: ASPNETCORE_URLS
+          value: http://+:80
+        - name: OTEL_SERVICE_NAME
+          value: tiervote-web
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://collector:4317
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: grpc
+        resources:
+          requests:
+            cpu: 200m
+            memory: 300Mi
+          limits:
+            memory: 400Mi
