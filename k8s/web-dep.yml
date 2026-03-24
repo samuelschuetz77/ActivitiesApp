@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activitiesapp-web
+  namespace: sam-cael-final
+  labels:
+    app: activitiesapp-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activitiesapp-web
+  template:
+    metadata:
+      labels:
+        app: activitiesapp-web
+    spec:
+      containers:
+      - name: activitiesapp-web
+        image: samuelschuetz77/activitiesapp-web:0.0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ApiAddress
+          value: "http://activitiesapp-api:80"
+        - name: ASPNETCORE_URLS
+          value: "http://+:80"
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 300Mi
+          limits:
+            memory: 400Mi
