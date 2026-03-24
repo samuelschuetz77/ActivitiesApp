@@ -40,20 +40,11 @@ jobs:
           tags: samuelschuetz77/activitiesapp-web:${{ steps.sha.outputs.sha_short }}
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-and-push
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
 
       - name: Apply Kubernetes manifests
         run: kubectl apply -f k8s/
