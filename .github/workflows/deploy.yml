@@ -46,22 +46,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Runner diagnostics
+        run: |
+          set -x
+          whoami
+          id
+          pwd
+          hostname
+          echo "KUBECONFIG=${KUBECONFIG:-<unset>}"
+          ls -ld /etc/rancher /etc/rancher/k3s || true
+          ls -l /etc/rancher/k3s/k3s.yaml || true
+          sudo kubectl version --client
+          sudo kubectl config current-context
+          sudo kubectl get nodes -o wide
+
       - name: Apply Kubernetes manifests
-        run: kubectl apply -f k8s/
+        run: |
+          set -euxo pipefail
+          sudo kubectl apply -f k8s/
 
       - name: Update API image
         run: |
-          kubectl set image deployment/activitiesapp-api \
+          set -euxo pipefail
+          sudo kubectl set image deployment/activitiesapp-api \
             activitiesapp-api=samuelschuetz77/activitiesapp-api:${{ needs.build-and-push.outputs.sha_short }} \
             -n sam-cael-final
 
       - name: Update Web image
         run: |
-          kubectl set image deployment/activitiesapp-web \
+          set -euxo pipefail
+          sudo kubectl set image deployment/activitiesapp-web \
             activitiesapp-web=samuelschuetz77/activitiesapp-web:${{ needs.build-and-push.outputs.sha_short }} \
             -n sam-cael-final
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/activitiesapp-api -n sam-cael-final --timeout=120s
-          kubectl rollout status deployment/activitiesapp-web -n sam-cael-final --timeout=120s
+          set -euxo pipefail
+          sudo kubectl rollout status deployment/activitiesapp-api -n sam-cael-final --timeout=120s
+          sudo kubectl rollout status deployment/activitiesapp-web -n sam-cael-final --timeout=120s
+
+      - name: Post-deploy status
+        if: always()
+        run: |
+          set -x
+          sudo kubectl get all -n sam-cael-final || true
+          sudo kubectl get ingress -n sam-cael-final || true
+          sudo kubectl get events -n sam-cael-final --sort-by=.lastTimestamp | tail -n 50 || true
