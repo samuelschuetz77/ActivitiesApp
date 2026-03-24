@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: activitiesapp-web
+  namespace: sam-cael-final
+spec:
+  selector:
+    app: activitiesapp-web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

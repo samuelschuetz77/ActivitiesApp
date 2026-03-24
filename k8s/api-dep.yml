@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activitiesapp-api
+  namespace: sam-cael-final
+  labels:
+    app: activitiesapp-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activitiesapp-api
+  template:
+    metadata:
+      labels:
+        app: activitiesapp-api
+    spec:
+      containers:
+      - name: activitiesapp-api
+        image: samuelschuetz77/activitiesapp-api:0.0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: DATABASE_PROVIDER
+          value: "Postgres"
+        - name: ConnectionStrings__ActivitiesDb
+          value: "Host=postgres;Database=activitiesdb;Username=activitiesuser;Password=activities123"
+        - name: ASPNETCORE_URLS
+          value: "http://+:80"
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: Kestrel__EndpointDefaults__Protocols
+          value: "Http1AndHttp2"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 300Mi
+          limits:
+            memory: 400Mi
