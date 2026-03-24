@@ -1,0 +1,1 @@
+Use dotnet build command and push to dockerHub manually instead of using ```uses: docker/build-push-action@v5``` on line 35. Need to change the k3s to point to the machine that we are running our runner on instead of using the root kube.config create a new kube.config on the same machine that the self hosted runner is running on~
