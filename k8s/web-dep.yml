@@ -17,17 +17,19 @@ spec:
     spec:
       containers:
       - name: activitiesapp-web
-        image: samuelschuetz77/activitiesapp-web:0.0.1
+        image: samuelschuetz77/activitiesapp-web:h2c81
         imagePullPolicy: Always
         ports:
         - containerPort: 80
         env:
         - name: ApiAddress
-          value: "http://activitiesapp-api:80"
+          value: "http://activitiesapp-api:81"
         - name: ASPNETCORE_URLS
           value: "http://+:80"
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
+        - name: APP_VERSION
+          value: "h2c81"
         resources:
           requests:
             cpu: 200m

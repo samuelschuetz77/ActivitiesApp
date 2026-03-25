@@ -12,7 +12,12 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(80, listenOptions =>
     {
-        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2;
+        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1;
+    });
+
+    options.ListenAnyIP(81, listenOptions =>
+    {
+        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
     });
 });
 
@@ -97,9 +102,10 @@ app.MapGet("/diag/version", () => Results.Ok(new
 }));
 app.MapGet("/diag/transport", () => Results.Ok(new
 {
-    mode = "grpc-web",
-    port = 80,
-    protocols = "http/1.1 + grpc-web"
+    mode = "dual",
+    httpPort = 80,
+    grpcPort = 81,
+    protocols = new[] { "http/1.1", "http/2" }
 }));
 
 app.MapGet("/diag/db", async (AppDbContext db, ILogger<Program> logger) =>
@@ -179,7 +185,7 @@ app.MapGet("/diag/google-nearby", async (
     }
 });
 
-startupLogger.LogInformation("API started. Version={Version} DB provider={DbProvider} ApiAddress bound on port 80. Environment={Environment}",
+startupLogger.LogInformation("API started. Version={Version} DB provider={DbProvider} HTTP bound on port 80 and gRPC on port 81. Environment={Environment}",
     apiVersion, dbProvider, app.Environment.EnvironmentName);
 
 app.Run();

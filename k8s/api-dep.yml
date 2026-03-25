@@ -17,10 +17,11 @@ spec:
     spec:
       containers:
       - name: activitiesapp-api
-        image: samuelschuetz77/activitiesapp-api:0.0.1
+        image: samuelschuetz77/activitiesapp-api:h2c81
         imagePullPolicy: Always
         ports:
         - containerPort: 80
+        - containerPort: 81
         env:
         - name: DATABASE_PROVIDER
           value: "Postgres"
@@ -30,6 +31,8 @@ spec:
           value: "http://+:80"
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
+        - name: APP_VERSION
+          value: "h2c81"
         - name: GoogleMaps__ApiKey
           valueFrom:
             secretKeyRef:

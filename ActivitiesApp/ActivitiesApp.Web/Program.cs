@@ -4,7 +4,6 @@ using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
-using Grpc.Net.Client.Web;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -19,8 +18,7 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// The deployed API serves gRPC-Web over HTTP/1.1 on port 80. Native gRPC over cleartext
-// does not work reliably there because Kestrel falls back to HTTP/1.1 without TLS.
+// The deployed API exposes a dedicated cleartext HTTP/2 port for native in-cluster gRPC.
 var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
@@ -33,15 +31,12 @@ builder.Services.AddSingleton(new WebDiagnosticInfo(webVersion, apiAddress));
 builder.Services.AddSingleton(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web/HTTP1.1", apiAddress);
-    var innerHandler = new GrpcLoggingHandler(
-        new HttpClientHandler(),
-        loggerFactory.CreateLogger<GrpcLoggingHandler>());
-    var grpcWebHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, innerHandler);
-    var httpClient = new HttpClient(grpcWebHandler)
+    logger.LogInformation("Connecting to API at {ApiAddress} via native gRPC over HTTP/2", apiAddress);
+    var httpClient = new HttpClient(new GrpcLoggingHandler(
+        new SocketsHttpHandler(),
+        sp.GetRequiredService<ILoggerFactory>().CreateLogger<GrpcLoggingHandler>()))
     {
-        DefaultRequestVersion = new Version(1, 1),
+        DefaultRequestVersion = new Version(2, 0),
         DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
     };
     var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
