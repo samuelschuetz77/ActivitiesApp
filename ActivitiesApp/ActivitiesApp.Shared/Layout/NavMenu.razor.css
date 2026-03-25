@@ -4,7 +4,7 @@
     display: flex;
     align-items: stretch;
     height: 100%;
-    gap: 0.125rem;
+    gap: 0.5rem;
 }
 
 .tab-item {
@@ -12,8 +12,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 0 1.125rem;
-    min-width: 4.75rem;
+    padding: 0 1rem;
+    min-width: 4.5rem;
     height: 100%;
     text-decoration: none;
     color: #888;
@@ -22,7 +22,7 @@
     letter-spacing: 0.01em;
     border-bottom: 3px solid transparent;
     transition: color 0.15s, border-color 0.15s;
-    gap: 3px;
+    gap: 5px;
 }
 
 .tab-item:hover {
@@ -66,13 +66,13 @@
 
     .tab-item {
         flex: 1;
-        padding: 0.5rem 0 0.4rem;
+        padding: 0.5rem 0 0.45rem;
         height: 100%;
         min-width: unset;
         border-bottom: none;
         border-top: 2px solid transparent;
         font-size: 0.68rem;
-        gap: 4px;
+        gap: 5px;
     }
 
     .tab-item.active {
