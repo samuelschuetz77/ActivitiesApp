@@ -29,7 +29,9 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Build with dotnet
-        run: dotnet build
+        run: |
+          dotnet build ActivitiesApp.Api/ActivitiesApp.Api.csproj
+          dotnet build ActivitiesApp/ActivitiesApp.Web/ActivitiesApp.Web.csproj
 
       - name: Build and push API image
         run: |
