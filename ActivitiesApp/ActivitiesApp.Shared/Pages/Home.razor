@@ -222,20 +222,29 @@
 
     private async Task LoadNearbyActivities()
     {
-        if (hasLocation)
+        try
         {
-            statusMessage = "Discovering activities nearby...";
-            StateHasChanged();
+            if (hasLocation)
+            {
+                statusMessage = "Discovering activities nearby...";
+                StateHasChanged();
 
-            var radiusMeters = (int)(10 * 1609.34); // 10 miles
-            nearbyActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
-            statusMessage = null;
-            StateHasChanged();
+                var radiusMeters = (int)(10 * 1609.34); // 10 miles
+                nearbyActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
+                statusMessage = null;
+                StateHasChanged();
+            }
+            else
+            {
+                nearbyActivities = await ActivityService.ListActivitiesAsync();
+                statusMessage = null;
+                StateHasChanged();
+            }
         }
-        else
+        catch
         {
-            nearbyActivities = await ActivityService.ListActivitiesAsync();
-            statusMessage = null;
+            statusMessage = "Unable to load activities. Please try again later.";
+            nearbyActivities = [];
             StateHasChanged();
         }
     }
