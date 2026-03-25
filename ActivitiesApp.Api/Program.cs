@@ -50,7 +50,12 @@ using (var scope = app.Services.CreateScope())
 
 app.MapDefaultEndpoints();
 
-app.MapGrpcService<ActivityGrpcService>();
+app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
+
+app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 app.MapGet("/", () => "ActivitiesApp gRPC API is running. Use a gRPC client to communicate.");
+
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+logger.LogInformation("API started. DB provider: {DbProvider}. ApiAddress bound on port 80.", dbProvider);
 
 app.Run();

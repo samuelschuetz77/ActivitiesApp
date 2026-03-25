@@ -4,8 +4,7 @@ using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
-
-AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+using Grpc.Net.Client.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,20 +17,17 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// Configure gRPC client pointing to the API
+// Configure gRPC-Web client pointing to the API (uses HTTP/1.1, avoids h2c issues)
 var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
 
 builder.Services.AddSingleton(sp =>
 {
-    var handler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true };
-    var httpClient = new HttpClient(handler)
-    {
-        DefaultRequestVersion = new Version(2, 0),
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
-    };
-    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web", apiAddress);
+    var handler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
+    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpHandler = handler });
     return new ActivityService.ActivityServiceClient(channel);
 });
 builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
