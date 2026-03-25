@@ -23,30 +23,33 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push API image
-        uses: docker/build-push-action@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          context: .
-          file: ActivitiesApp.Api/Dockerfile
-          push: true
-          tags: samuelschuetz77/activitiesapp-api:${{ steps.sha.outputs.sha_short }}
+          dotnet-version: '9.0.x'
+
+      - name: Build with dotnet
+        run: dotnet build
+
+      - name: Build and push API image
+        run: |
+          docker build -t samuelschuetz77/activitiesapp-api:${{ steps.sha.outputs.sha_short }} -f ActivitiesApp.Api/Dockerfile .
+          docker push samuelschuetz77/activitiesapp-api:${{ steps.sha.outputs.sha_short }}
 
       - name: Build and push Web image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ActivitiesApp/ActivitiesApp.Web/Dockerfile
-          push: true
-          tags: samuelschuetz77/activitiesapp-web:${{ steps.sha.outputs.sha_short }}
+        run: |
+          docker build -t samuelschuetz77/activitiesapp-web:${{ steps.sha.outputs.sha_short }} -f ActivitiesApp/ActivitiesApp.Web/Dockerfile .
+          docker push samuelschuetz77/activitiesapp-web:${{ steps.sha.outputs.sha_short }}
 
   deploy:
     runs-on: self-hosted
     needs: build-and-push
-    env:
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set KUBECONFIG
+        run: echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
       - name: Runner diagnostics
         run: |
@@ -56,7 +59,6 @@ jobs:
           pwd
           hostname
           echo "KUBECONFIG=$KUBECONFIG"
-          ls -ld /etc/rancher /etc/rancher/k3s
           ls -l "$KUBECONFIG"
           test -r "$KUBECONFIG"
           kubectl version --client
