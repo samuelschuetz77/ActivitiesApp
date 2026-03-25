@@ -22,12 +22,18 @@ var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
 
+builder.Services.AddSingleton(apiAddress); // expose for diagnostics
 builder.Services.AddSingleton(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web", apiAddress);
-    var handler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
-    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpHandler = handler });
+    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web/HTTP1.1", apiAddress);
+    var grpcWebHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
+    var httpClient = new HttpClient(grpcWebHandler)
+    {
+        DefaultRequestVersion = new Version(1, 1),
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+    };
+    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
     return new ActivityService.ActivityServiceClient(channel);
 });
 builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();

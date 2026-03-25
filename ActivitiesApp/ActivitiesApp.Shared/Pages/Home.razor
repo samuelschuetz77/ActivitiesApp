@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject LocationService LocationService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @implements IDisposable
 
 <PageTitle>Home</PageTitle>
@@ -247,7 +248,8 @@
         }
         catch (Exception ex)
         {
-            statusMessage = $"Unable to load activities: {ex.Message}";
+            var api = Configuration["ApiAddress"] ?? "not set";
+            statusMessage = $"[API={api}] Unable to load activities: {ex.Message}";
             nearbyActivities = [];
             StateHasChanged();
         }
