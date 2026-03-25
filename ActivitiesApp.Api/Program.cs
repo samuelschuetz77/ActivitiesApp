@@ -37,7 +37,10 @@ else
 }
 
 // Register Google Places service with HttpClient
-builder.Services.AddHttpClient<GooglePlacesService>();
+builder.Services.AddHttpClient<GooglePlacesService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 
 var app = builder.Build();
 

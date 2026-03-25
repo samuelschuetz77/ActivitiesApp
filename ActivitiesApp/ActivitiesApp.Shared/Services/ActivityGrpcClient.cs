@@ -2,22 +2,27 @@ using ActivitiesApp.Shared.Models;
 using ActivitiesApp.Protos;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 
 namespace ActivitiesApp.Shared.Services;
 
 public class ActivityGrpcClient : IActivityService
 {
     private readonly ActivityService.ActivityServiceClient _client;
+    private readonly ILogger<ActivityGrpcClient> _logger;
+    private static readonly TimeSpan DefaultDeadline = TimeSpan.FromSeconds(20);
 
-    public ActivityGrpcClient(ActivityService.ActivityServiceClient client)
+    public ActivityGrpcClient(ActivityService.ActivityServiceClient client, ILogger<ActivityGrpcClient> logger)
     {
         _client = client;
+        _logger = logger;
     }
 
     // ─── Activity CRUD ───
 
     public async Task<Activity> CreateActivityAsync(Activity activity)
     {
+        var startedAt = DateTime.UtcNow;
         var request = new CreateActivityRequest
         {
             Name = activity.Name ?? "",
@@ -33,33 +38,46 @@ public class ActivityGrpcClient : IActivityService
             ImageUrl = activity.ImageUrl ?? ""
         };
 
-        var response = await _client.CreateActivityAsync(request);
+        _logger.LogInformation("CreateActivityAsync starting for {Name}", activity.Name);
+        var response = await _client.CreateActivityAsync(request, deadline: startedAt.Add(DefaultDeadline));
+        _logger.LogInformation("CreateActivityAsync completed for {Name} in {DurationMs}ms",
+            activity.Name, (DateTime.UtcNow - startedAt).TotalMilliseconds);
         return ToActivityModel(response);
     }
 
     public async Task<Activity?> GetActivityAsync(Guid id)
     {
+        var startedAt = DateTime.UtcNow;
         try
         {
-            var response = await _client.GetActivityAsync(new GetActivityRequest { Id = id.ToString() });
+            _logger.LogInformation("GetActivityAsync starting for {ActivityId}", id);
+            var response = await _client.GetActivityAsync(new GetActivityRequest { Id = id.ToString() },
+                deadline: startedAt.Add(DefaultDeadline));
+            _logger.LogInformation("GetActivityAsync completed for {ActivityId} in {DurationMs}ms",
+                id, (DateTime.UtcNow - startedAt).TotalMilliseconds);
             return ToActivityModel(response);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
+            _logger.LogWarning("GetActivityAsync did not find {ActivityId}", id);
             return null;
         }
     }
 
     public async Task<List<Activity>> ListActivitiesAsync()
     {
+        var startedAt = DateTime.UtcNow;
         var activities = new List<Activity>();
 
-        using var call = _client.ListActivities(new ListActivitiesRequest());
+        _logger.LogInformation("ListActivitiesAsync starting");
+        using var call = _client.ListActivities(new ListActivitiesRequest(), deadline: startedAt.Add(DefaultDeadline));
         await foreach (var response in call.ResponseStream.ReadAllAsync())
         {
             activities.Add(ToActivityModel(response));
         }
 
+        _logger.LogInformation("ListActivitiesAsync completed with {Count} activities in {DurationMs}ms",
+            activities.Count, (DateTime.UtcNow - startedAt).TotalMilliseconds);
         return activities;
     }
 
@@ -67,6 +85,7 @@ public class ActivityGrpcClient : IActivityService
 
     public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters)
     {
+        var startedAt = DateTime.UtcNow;
         var request = new DiscoverActivitiesRequest
         {
             Latitude = lat,
@@ -76,12 +95,18 @@ public class ActivityGrpcClient : IActivityService
 
         var activities = new List<Activity>();
 
-        using var call = _client.DiscoverActivities(request);
+        _logger.LogInformation(
+            "DiscoverActivitiesAsync starting at ({Lat},{Lng}) radius={RadiusMeters}m",
+            lat, lng, radiusMeters);
+        using var call = _client.DiscoverActivities(request, deadline: startedAt.Add(DefaultDeadline));
         await foreach (var response in call.ResponseStream.ReadAllAsync())
         {
             activities.Add(ToActivityModel(response));
         }
 
+        _logger.LogInformation(
+            "DiscoverActivitiesAsync completed with {Count} activities in {DurationMs}ms",
+            activities.Count, (DateTime.UtcNow - startedAt).TotalMilliseconds);
         return activities;
     }
 
@@ -90,6 +115,7 @@ public class ActivityGrpcClient : IActivityService
     public async Task<List<NearbyPlace>> SearchNearbyPlacesAsync(
         double lat, double lng, int radiusMeters, string? type = null, string? keyword = null)
     {
+        var startedAt = DateTime.UtcNow;
         var request = new SearchNearbyRequest
         {
             Latitude = lat,
@@ -101,7 +127,10 @@ public class ActivityGrpcClient : IActivityService
 
         var places = new List<NearbyPlace>();
 
-        using var call = _client.SearchNearbyPlaces(request);
+        _logger.LogInformation(
+            "SearchNearbyPlacesAsync starting at ({Lat},{Lng}) radius={RadiusMeters}m type={Type} keyword={Keyword}",
+            lat, lng, radiusMeters, type ?? "", keyword ?? "");
+        using var call = _client.SearchNearbyPlaces(request, deadline: startedAt.Add(DefaultDeadline));
         await foreach (var result in call.ResponseStream.ReadAllAsync())
         {
             places.Add(new NearbyPlace
@@ -120,15 +149,22 @@ public class ActivityGrpcClient : IActivityService
             });
         }
 
+        _logger.LogInformation("SearchNearbyPlacesAsync completed with {Count} places in {DurationMs}ms",
+            places.Count, (DateTime.UtcNow - startedAt).TotalMilliseconds);
         return places;
     }
 
     public async Task<Models.PlaceDetails?> GetPlaceDetailsAsync(string placeId)
     {
+        var startedAt = DateTime.UtcNow;
         try
         {
+            _logger.LogInformation("GetPlaceDetailsAsync starting for {PlaceId}", placeId);
             var response = await _client.GetPlaceDetailsAsync(
-                new GetPlaceDetailsRequest { PlaceId = placeId });
+                new GetPlaceDetailsRequest { PlaceId = placeId },
+                deadline: startedAt.Add(DefaultDeadline));
+            _logger.LogInformation("GetPlaceDetailsAsync completed for {PlaceId} in {DurationMs}ms",
+                placeId, (DateTime.UtcNow - startedAt).TotalMilliseconds);
 
             return new Models.PlaceDetails
             {
@@ -156,14 +192,20 @@ public class ActivityGrpcClient : IActivityService
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
+            _logger.LogWarning("GetPlaceDetailsAsync did not find {PlaceId}", placeId);
             return null;
         }
     }
 
     public async Task<string> ReverseGeocodeAsync(double lat, double lng)
     {
+        var startedAt = DateTime.UtcNow;
+        _logger.LogInformation("ReverseGeocodeAsync starting at ({Lat},{Lng})", lat, lng);
         var response = await _client.ReverseGeocodeAsync(
-            new ReverseGeocodeRequest { Latitude = lat, Longitude = lng });
+            new ReverseGeocodeRequest { Latitude = lat, Longitude = lng },
+            deadline: startedAt.Add(DefaultDeadline));
+        _logger.LogInformation("ReverseGeocodeAsync completed in {DurationMs}ms",
+            (DateTime.UtcNow - startedAt).TotalMilliseconds);
         return response.FormattedAddress;
     }
 

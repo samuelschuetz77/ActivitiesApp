@@ -24,6 +24,8 @@ public class LocationService : IDisposable
     {
         if (_timer != null) return;
 
+        _logger.LogInformation("Starting browser location tracking");
+
         // Initial fetch immediately, then every 3 minutes
         _ = UpdateLocationAsync(js);
         _timer = new Timer(
@@ -38,15 +40,23 @@ public class LocationService : IDisposable
         try
         {
             var coords = await js.InvokeAsync<double[]>("getUserLocation");
+            if (coords.Length < 2)
+            {
+                throw new InvalidOperationException("Browser location response was missing coordinates.");
+            }
+
             Latitude = coords[0];
             Longitude = coords[1];
             HasLocation = true;
             LastError = null;
-            _logger.LogDebug("Location updated: {Lat}, {Lng}", Latitude, Longitude);
+            _logger.LogInformation("Location updated: {Lat}, {Lng}", Latitude, Longitude);
             LocationChanged?.Invoke();
         }
         catch (Exception ex)
         {
+            Latitude = 0;
+            Longitude = 0;
+            HasLocation = false;
             LastError = ex.Message;
             _logger.LogWarning(ex, "Failed to get location");
             LocationChanged?.Invoke();

@@ -4,7 +4,7 @@ using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
-using Grpc.Net.Client.Web;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +17,8 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// Configure gRPC-Web client pointing to the API (uses HTTP/1.1, avoids h2c issues)
+// Configure native gRPC client pointing to the API. This app is server-side, so it can
+// talk to the API directly over HTTP/2 in-cluster instead of going through gRPC-Web.
 var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
@@ -26,12 +27,11 @@ builder.Services.AddSingleton(apiAddress); // expose for diagnostics
 builder.Services.AddSingleton(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web/HTTP1.1", apiAddress);
-    var grpcWebHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
-    var httpClient = new HttpClient(grpcWebHandler)
+    logger.LogInformation("Connecting to API at {ApiAddress} via native gRPC", apiAddress);
+    var httpClient = new HttpClient()
     {
-        DefaultRequestVersion = new Version(1, 1),
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        DefaultRequestVersion = HttpVersion.Version20,
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher
     };
     var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
     return new ActivityService.ActivityServiceClient(channel);

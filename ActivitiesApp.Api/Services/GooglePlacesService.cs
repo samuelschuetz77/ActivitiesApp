@@ -34,6 +34,9 @@ public class GooglePlacesService
         if (!string.IsNullOrEmpty(keyword))
             url += $"&keyword={Uri.EscapeDataString(keyword)}";
 
+        _logger.LogInformation(
+            "Google Nearby Search request: lat={Lat}, lng={Lng}, radius={RadiusMeters}, type={Type}, keyword={Keyword}",
+            lat, lng, radiusMeters, type ?? "", keyword ?? "");
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
@@ -79,6 +82,7 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/place/details/json" +
                   $"?place_id={Uri.EscapeDataString(placeId)}&fields={fields}&key={_apiKey}";
 
+        _logger.LogInformation("Google Place Details request for {PlaceId}", placeId);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
@@ -125,12 +129,14 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
                   $"?latlng={lat},{lng}&key={_apiKey}";
 
+        _logger.LogInformation("Google Reverse Geocode request for ({Lat},{Lng})", lat, lng);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<GeocodeResponse>(JsonOptions);
-
-        return json?.Results?.FirstOrDefault()?.FormattedAddress ?? "Unknown location";
+        var address = json?.Results?.FirstOrDefault()?.FormattedAddress ?? "Unknown location";
+        _logger.LogInformation("Google Reverse Geocode resolved ({Lat},{Lng}) to {Address}", lat, lng, address);
+        return address;
     }
 
     private string BuildPhotoUrl(string photoReference, int maxWidth)

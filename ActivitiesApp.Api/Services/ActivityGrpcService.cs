@@ -69,10 +69,13 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         IServerStreamWriter<ActivityResponse> responseStream,
         ServerCallContext context)
     {
+        _logger.LogInformation("ListActivities started");
         var activities = await _db.Activities
+            .AsNoTracking()
             .Where(a => !a.IsDeleted)
             .ToListAsync();
 
+        _logger.LogInformation("ListActivities loaded {Count} rows from DB", activities.Count);
         foreach (var activity in activities)
         {
             if (context.CancellationToken.IsCancellationRequested)
@@ -80,6 +83,8 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
 
             await responseStream.WriteAsync(ToActivityResponse(activity));
         }
+
+        _logger.LogInformation("ListActivities finished streaming {Count} rows", activities.Count);
     }
 
     // ─── Discover (Google + DB sync) ───
@@ -92,15 +97,29 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         _logger.LogInformation("DiscoverActivities at ({Lat},{Lng}) radius={Radius}m",
             request.Latitude, request.Longitude, request.RadiusMeters);
 
-        // Search Google for fun things nearby
-        var places = await _places.SearchNearbyAsync(
-            request.Latitude, request.Longitude, request.RadiusMeters,
-            type: null, keyword: "fun things to do");
+        List<GooglePlacesService.NearbyPlace> places;
+        try
+        {
+            // Search Google for fun things nearby
+            places = await _places.SearchNearbyAsync(
+                request.Latitude, request.Longitude, request.RadiusMeters,
+                type: null, keyword: "fun things to do");
+            _logger.LogInformation("DiscoverActivities received {Count} Google places", places.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "DiscoverActivities Google search failed at ({Lat},{Lng}) radius={Radius}m. Falling back to DB only.",
+                request.Latitude, request.Longitude, request.RadiusMeters);
+            places = [];
+        }
 
         // Load all existing activities that came from Google into a lookup
         var existingActivities = await _db.Activities
+            .AsNoTracking()
             .Where(a => a.PlaceId != null)
             .ToListAsync();
+        _logger.LogInformation("DiscoverActivities loaded {Count} existing Google-backed DB rows", existingActivities.Count);
 
         var existingByPlaceId = existingActivities
             .Where(a => !string.IsNullOrEmpty(a.PlaceId))
@@ -108,6 +127,8 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             .ToDictionary(g => g.Key, g => g.First());
 
         var newActivities = new List<Activity>();
+        var streamedExistingCount = 0;
+        var streamedNewCount = 0;
 
         foreach (var place in places)
         {
@@ -120,6 +141,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             if (existingByPlaceId.TryGetValue(place.PlaceId, out var existing))
             {
                 await responseStream.WriteAsync(ToActivityResponse(existing));
+                streamedExistingCount++;
             }
             else
             {
@@ -146,6 +168,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
                 newActivities.Add(activity);
                 existingByPlaceId[place.PlaceId] = activity;
                 await responseStream.WriteAsync(ToActivityResponse(activity));
+                streamedNewCount++;
             }
         }
 
@@ -154,7 +177,27 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         {
             _db.Activities.AddRange(newActivities);
             await _db.SaveChangesAsync();
+            _logger.LogInformation("DiscoverActivities saved {Count} new DB rows", newActivities.Count);
         }
+
+        if (places.Count == 0)
+        {
+            var dbFallbackActivities = await LoadNearbyDbActivitiesAsync(
+                request.Latitude, request.Longitude, request.RadiusMeters, context.CancellationToken);
+            _logger.LogInformation("DiscoverActivities DB fallback loaded {Count} rows", dbFallbackActivities.Count);
+
+            foreach (var activity in dbFallbackActivities)
+            {
+                if (context.CancellationToken.IsCancellationRequested)
+                    break;
+
+                await responseStream.WriteAsync(ToActivityResponse(activity));
+            }
+        }
+
+        _logger.LogInformation(
+            "DiscoverActivities finished. Streamed {ExistingCount} existing, {NewCount} new, GooglePlaceCount={GooglePlaceCount}",
+            streamedExistingCount, streamedNewCount, places.Count);
     }
 
     private static string MapGoogleTypeToCategory(List<string> types)
@@ -265,6 +308,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
     public override async Task<ReverseGeocodeResponse> ReverseGeocode(
         ReverseGeocodeRequest request, ServerCallContext context)
     {
+        _logger.LogInformation("ReverseGeocode requested for ({Lat},{Lng})", request.Latitude, request.Longitude);
         var address = await _places.ReverseGeocodeAsync(request.Latitude, request.Longitude);
         return new ReverseGeocodeResponse { FormattedAddress = address };
     }
@@ -426,4 +470,37 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             IsDeleted = item.IsDeleted
         };
     }
+
+    private async Task<List<Activity>> LoadNearbyDbActivitiesAsync(
+        double latitude,
+        double longitude,
+        int radiusMeters,
+        CancellationToken cancellationToken)
+    {
+        var radiusMiles = radiusMeters / 1609.34;
+        var candidates = await _db.Activities
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        return candidates
+            .Where(a => GetDistanceMiles(latitude, longitude, a.Latitude, a.Longitude) <= radiusMiles)
+            .OrderBy(a => GetDistanceMiles(latitude, longitude, a.Latitude, a.Longitude))
+            .Take(50)
+            .ToList();
+    }
+
+    private static double GetDistanceMiles(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double earthRadiusMiles = 3958.8;
+        var dLat = ToRadians(lat2 - lat1);
+        var dLng = ToRadians(lng2 - lng1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return earthRadiusMiles * c;
+    }
+
+    private static double ToRadians(double degrees) => degrees * Math.PI / 180.0;
 }

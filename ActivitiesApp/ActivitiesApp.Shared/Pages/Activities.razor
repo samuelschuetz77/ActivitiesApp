@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject LocationService LocationService
+@inject ILogger<Activities> Logger
 @implements IDisposable
 
 <div class="activities-page">
@@ -107,7 +108,7 @@
     }
 
     <!-- Activity Cards Grid -->
-    @if (filteredActivities == null && string.IsNullOrEmpty(statusMessage))
+    @if ((filteredActivities == null || isLoadingActivities) && string.IsNullOrEmpty(statusMessage))
     {
         <div class="loading">Loading activities...</div>
     }
@@ -168,6 +169,7 @@
     private string selectedCategory = "";
     private string selectedAgeRange = "";
     private string? statusMessage;
+    private bool isLoadingActivities;
 
     private bool showLocationPopup;
     private string? userAddress;
@@ -197,15 +199,33 @@
 
     private async Task LoadActivities()
     {
-        if (hasLocation)
+        isLoadingActivities = true;
+        try
         {
-            await DiscoverNearby();
+            if (hasLocation)
+            {
+                await DiscoverNearby();
+            }
+            else
+            {
+                statusMessage = "Loading saved activities...";
+                Logger.LogInformation("Activities page loading activities without browser location");
+                allActivities = await ActivityService.ListActivitiesAsync();
+                statusMessage = null;
+                ApplyFilters();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            allActivities = await ActivityService.ListActivitiesAsync();
-            statusMessage = null;
-            ApplyFilters();
+            Logger.LogError(ex, "Activities page failed to load activities");
+            allActivities = [];
+            filteredActivities = [];
+            statusMessage = $"Unable to load activities: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingActivities = false;
+            StateHasChanged();
         }
     }
 
@@ -215,6 +235,8 @@
         StateHasChanged();
 
         var radiusMeters = (int)(selectedRadius * 1609.34); // miles to meters
+        Logger.LogInformation("Activities page discovering nearby activities at ({Lat},{Lng}) radius={RadiusMiles}mi",
+            userLat, userLng, selectedRadius);
         allActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
 
         statusMessage = null;
@@ -318,9 +340,10 @@
                 userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
                 StateHasChanged();
             }
-            catch
+            catch (Exception ex)
             {
-                userAddress = "Address unavailable";
+                Logger.LogWarning(ex, "Activities page reverse geocode failed");
+                userAddress = $"Address unavailable: {ex.Message}";
             }
         }
     }

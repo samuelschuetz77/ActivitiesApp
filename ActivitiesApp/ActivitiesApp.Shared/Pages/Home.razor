@@ -7,6 +7,7 @@
 @inject IJSRuntime JS
 @inject LocationService LocationService
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject ILogger<Home> Logger
 @implements IDisposable
 
 <PageTitle>Home</PageTitle>
@@ -107,7 +108,7 @@
         {
             <div class="loading">@statusMessage</div>
         }
-        else if (nearbyActivities == null)
+        else if (isLoadingNearby || nearbyActivities == null)
         {
             <div class="loading">Loading activities...</div>
         }
@@ -167,6 +168,7 @@
     private List<Activity>? recentActivities;
     private List<Activity>? nearbyActivities;
     private string? statusMessage;
+    private bool isLoadingNearby;
 
     private bool showLocationPopup;
     private string? userAddress;
@@ -219,14 +221,15 @@
                 StateHasChanged();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // No recently viewed items
+            Logger.LogDebug(ex, "Unable to load recently viewed activities");
         }
     }
 
     private async Task LoadNearbyActivities()
     {
+        isLoadingNearby = true;
         try
         {
             if (hasLocation)
@@ -235,22 +238,28 @@
                 StateHasChanged();
 
                 var radiusMeters = (int)(10 * 1609.34); // 10 miles
+                Logger.LogInformation("Home page discovering nearby activities at ({Lat},{Lng})", userLat, userLng);
                 nearbyActivities = await ActivityService.DiscoverActivitiesAsync(userLat, userLng, radiusMeters);
                 statusMessage = null;
-                StateHasChanged();
             }
             else
             {
+                statusMessage = "Loading saved activities...";
+                Logger.LogInformation("Home page loading activities without browser location");
                 nearbyActivities = await ActivityService.ListActivitiesAsync();
                 statusMessage = null;
-                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
             var api = Configuration["ApiAddress"] ?? "not set";
+            Logger.LogError(ex, "Home page failed to load activities from {ApiAddress}", api);
             statusMessage = $"[API={api}] Unable to load activities: {ex.Message}";
             nearbyActivities = [];
+        }
+        finally
+        {
+            isLoadingNearby = false;
             StateHasChanged();
         }
     }
@@ -300,6 +309,7 @@
             }
             catch (Exception ex)
             {
+                Logger.LogWarning(ex, "Home page reverse geocode failed");
                 userAddress = $"Address unavailable: {ex.Message}";
             }
         }
