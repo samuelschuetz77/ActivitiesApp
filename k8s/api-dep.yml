@@ -30,8 +30,6 @@ spec:
           value: "http://+:80"
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
-        - name: Kestrel__EndpointDefaults__Protocols
-          value: "Http1AndHttp2"
         - name: GoogleMaps__ApiKey
           valueFrom:
             secretKeyRef:
