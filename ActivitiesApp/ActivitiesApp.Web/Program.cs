@@ -25,7 +25,13 @@ var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
 
 builder.Services.AddSingleton(sp =>
 {
-    var channel = GrpcChannel.ForAddress(apiAddress);
+    var handler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true };
+    var httpClient = new HttpClient(handler)
+    {
+        DefaultRequestVersion = new Version(2, 0),
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+    };
+    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
     return new ActivityService.ActivityServiceClient(channel);
 });
 builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
