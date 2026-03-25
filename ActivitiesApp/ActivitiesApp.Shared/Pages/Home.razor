@@ -42,6 +42,10 @@
                     else
                     {
                         <p class="location-address">Location not available</p>
+                        @if (!string.IsNullOrEmpty(LocationService.LastError))
+                        {
+                            <p class="location-address" style="color:red;font-size:0.8em;">Error: @LocationService.LastError</p>
+                        }
                     }
                 </div>
             }
@@ -241,9 +245,9 @@
                 StateHasChanged();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            statusMessage = "Unable to load activities. Please try again later.";
+            statusMessage = $"Unable to load activities: {ex.Message}";
             nearbyActivities = [];
             StateHasChanged();
         }
@@ -292,9 +296,9 @@
                 userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
                 StateHasChanged();
             }
-            catch
+            catch (Exception ex)
             {
-                userAddress = "Address unavailable";
+                userAddress = $"Address unavailable: {ex.Message}";
             }
         }
     }
