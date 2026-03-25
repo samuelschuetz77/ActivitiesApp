@@ -32,6 +32,11 @@ spec:
           value: "Production"
         - name: Kestrel__EndpointDefaults__Protocols
           value: "Http1AndHttp2"
+        - name: GoogleMaps__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: google-maps-secret
+              key: api-key
         resources:
           requests:
             cpu: 200m

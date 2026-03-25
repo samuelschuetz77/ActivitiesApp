@@ -67,6 +67,13 @@ jobs:
           kubectl config current-context
           kubectl get nodes -o wide
 
+      - name: Create Google Maps API key secret
+        run: |
+          kubectl create secret generic google-maps-secret \
+            --from-literal=api-key=${{ secrets.GOOGLE_MAPS_API_KEY }} \
+            --namespace=sam-cael-final \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply Kubernetes manifests
         run: |
           set -euxo pipefail
