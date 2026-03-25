@@ -53,10 +53,39 @@ using (var scope = app.Services.CreateScope())
 
 app.MapDefaultEndpoints();
 
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    var contentType = context.Request.ContentType ?? "(none)";
+
+    logger.LogInformation("HTTP request starting: {Method} {Path} content-type={ContentType}",
+        context.Request.Method, context.Request.Path, contentType);
+
+    try
+    {
+        await next();
+        logger.LogInformation("HTTP request completed: {Method} {Path} status={StatusCode} in {DurationMs}ms",
+            context.Request.Method, context.Request.Path, context.Response.StatusCode, sw.ElapsedMilliseconds);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "HTTP request failed: {Method} {Path} after {DurationMs}ms",
+            context.Request.Method, context.Request.Path, sw.ElapsedMilliseconds);
+        throw;
+    }
+});
+
 app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
 
 app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 app.MapGet("/", () => "ActivitiesApp gRPC API is running. Use a gRPC client to communicate.");
+app.MapGet("/diag/transport", () => Results.Ok(new
+{
+    mode = "grpc-web",
+    port = 80,
+    protocols = "http/1.1 + grpc-web"
+}));
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("API started. DB provider: {DbProvider}. ApiAddress bound on port 80.", dbProvider);

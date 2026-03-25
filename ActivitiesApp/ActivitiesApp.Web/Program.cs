@@ -4,7 +4,7 @@ using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
-using System.Net;
+using Grpc.Net.Client.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,8 +17,8 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// Configure native gRPC client pointing to the API. This app is server-side, so it can
-// talk to the API directly over HTTP/2 in-cluster instead of going through gRPC-Web.
+// The deployed API serves gRPC-Web over HTTP/1.1 on port 80. Native gRPC over cleartext
+// does not work reliably there because Kestrel falls back to HTTP/1.1 without TLS.
 var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
@@ -27,11 +27,16 @@ builder.Services.AddSingleton(apiAddress); // expose for diagnostics
 builder.Services.AddSingleton(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Connecting to API at {ApiAddress} via native gRPC", apiAddress);
-    var httpClient = new HttpClient()
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    logger.LogInformation("Connecting to API at {ApiAddress} via gRPC-Web/HTTP1.1", apiAddress);
+    var innerHandler = new GrpcLoggingHandler(
+        new HttpClientHandler(),
+        loggerFactory.CreateLogger<GrpcLoggingHandler>());
+    var grpcWebHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, innerHandler);
+    var httpClient = new HttpClient(grpcWebHandler)
     {
-        DefaultRequestVersion = HttpVersion.Version20,
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher
+        DefaultRequestVersion = new Version(1, 1),
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
     };
     var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions { HttpClient = httpClient });
     return new ActivityService.ActivityServiceClient(channel);
