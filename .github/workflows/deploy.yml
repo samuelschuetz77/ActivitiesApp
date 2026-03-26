@@ -80,9 +80,7 @@ jobs:
 
       - name: Apply manifests
         run: |
-          kubectl apply -f k8s/postgres.yaml
-          kubectl apply -f k8s/api.yaml
-          kubectl apply -f k8s/web.yaml
+          kubectl apply -f k8s
 
       - name: Set deployment images
         run: |

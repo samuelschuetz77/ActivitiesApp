@@ -2,11 +2,12 @@ apiVersion: v1
 kind: Service
 metadata:
   name: activitiesapp-web
-  namespace: sam-cael-final
+  namespace: activitiesapp
 spec:
   selector:
     app: activitiesapp-web
   ports:
-    - protocol: TCP
+    - name: http
       port: 80
-      targetPort: 80
+      targetPort: 8080
+  type: ClusterIP
