@@ -40,9 +40,15 @@ builder.Services.AddSingleton(sp =>
     var grpcLogger = loggerFactory.CreateLogger("GrpcWeb");
     grpcLogger.LogInformation("Creating gRPC-Web channel to {ApiAddress}", apiAddress);
 
+    var handler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
+    var httpClient = new HttpClient(handler)
+    {
+        DefaultRequestVersion = new Version(1, 1),
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+    };
     var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions
     {
-        HttpHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler())
+        HttpClient = httpClient
     });
     return new ActivityService.ActivityServiceClient(channel);
 });
