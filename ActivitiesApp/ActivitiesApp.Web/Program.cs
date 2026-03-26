@@ -4,6 +4,7 @@ using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +15,7 @@ builder.AddServiceDefaults();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -46,6 +47,7 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Web starting — Version={Version}, ApiAddress={ApiAddress}, Env={Env}",
     appVersion, apiAddress, app.Environment.EnvironmentName);
 
+app.UseForwardedHeaders();
 app.MapDefaultEndpoints();
 
 // Configure the HTTP request pipeline.
