@@ -8,10 +8,12 @@ namespace ActivitiesApp.Shared.Services;
 public class ActivityGrpcClient : IActivityService
 {
     private readonly ActivityService.ActivityServiceClient _client;
+    private readonly string _apiBaseAddress;
 
-    public ActivityGrpcClient(ActivityService.ActivityServiceClient client)
+    public ActivityGrpcClient(ActivityService.ActivityServiceClient client, string apiBaseAddress)
     {
         _client = client;
+        _apiBaseAddress = apiBaseAddress.TrimEnd('/');
     }
 
     // ─── Activity CRUD ───
@@ -141,7 +143,7 @@ public class ActivityGrpcClient : IActivityService
                 UserRatingsTotal = response.UserRatingsTotal,
                 Latitude = response.Latitude,
                 Longitude = response.Longitude,
-                PhotoUrls = response.PhotoUrls.ToList(),
+                PhotoUrls = response.PhotoUrls.Select(u => ResolveImageUrl(u) ?? u).ToList(),
                 Reviews = response.Reviews.Select(r => new PlaceReviewData
                 {
                     AuthorName = r.AuthorName,
@@ -169,7 +171,7 @@ public class ActivityGrpcClient : IActivityService
 
     // ─── Mapping ───
 
-    private static Activity ToActivityModel(ActivityResponse response)
+    private Activity ToActivityModel(ActivityResponse response)
     {
         return new Activity
         {
@@ -184,9 +186,18 @@ public class ActivityGrpcClient : IActivityService
             MinAge = response.MinAge,
             MaxAge = response.MaxAge,
             Category = string.IsNullOrEmpty(response.Category) ? null : response.Category,
-            ImageUrl = string.IsNullOrEmpty(response.ImageUrl) ? null : response.ImageUrl,
+            ImageUrl = ResolveImageUrl(response.ImageUrl),
             PlaceId = string.IsNullOrEmpty(response.PlaceId) ? null : response.PlaceId,
             Rating = response.Rating
         };
+    }
+
+    private string? ResolveImageUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        // Relative URLs from the API photo proxy need the API base address prepended
+        if (url.StartsWith("/"))
+            return _apiBaseAddress + url;
+        return url;
     }
 }

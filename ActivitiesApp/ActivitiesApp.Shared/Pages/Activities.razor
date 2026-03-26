@@ -267,6 +267,12 @@
                 string.Equals(a.Category, selectedCategory, StringComparison.OrdinalIgnoreCase));
         }
 
+        // Filter by radius — exclude activities beyond the selected distance
+        if (hasLocation)
+        {
+            query = query.Where(a => GetDistanceValue(a) <= selectedRadius);
+        }
+
         if (!string.IsNullOrEmpty(selectedAgeRange))
         {
             var parts = selectedAgeRange.Split('-');
@@ -291,9 +297,9 @@
         return $"${cost:F2}";
     }
 
-    private string GetDistance(Activity activity)
+    private double GetDistanceValue(Activity activity)
     {
-        if (!hasLocation) return "?";
+        if (!hasLocation) return double.MaxValue;
 
         const double R = 3958.8;
         var dLat = ToRad(activity.Latitude - userLat);
@@ -302,8 +308,11 @@
                 Math.Cos(ToRad(userLat)) * Math.Cos(ToRad(activity.Latitude)) *
                 Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return (R * c).ToString("0.1");
+        return R * c;
     }
+
+    private string GetDistance(Activity activity) =>
+        hasLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 

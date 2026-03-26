@@ -72,13 +72,15 @@
     }
 
 .nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.37);
-    color: white;
+    background-color: #5c6bc0;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .nav-item ::deep .nav-link:hover {
-    background-color: rgba(255,255,255,0.1);
-    color: white;
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
 }
 
 .nav-scrollable {

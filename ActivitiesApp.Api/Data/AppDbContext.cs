@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ActivitiesApp.Api.Data
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext : DbContext, IActivityDbContext
     {
         public DbSet<Activity> Activities { get; set; }
 

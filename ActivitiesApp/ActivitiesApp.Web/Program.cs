@@ -26,10 +26,16 @@ builder.Services.AddSingleton(sp =>
     var channel = GrpcChannel.ForAddress(apiAddress);
     return new ActivityService.ActivityServiceClient(channel);
 });
-builder.Services.AddScoped<IActivityService, ActivityGrpcClient>();
+builder.Services.AddScoped<IActivityService>(sp =>
+    new ActivityGrpcClient(sp.GetRequiredService<ActivityService.ActivityServiceClient>(), apiAddress));
 builder.Services.AddSingleton<LocationService>();
 
 var app = builder.Build();
+
+var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+logger.LogInformation("Web starting — Version={Version}, ApiAddress={ApiAddress}, Env={Env}",
+    appVersion, apiAddress, app.Environment.EnvironmentName);
 
 app.MapDefaultEndpoints();
 
@@ -40,11 +46,25 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// Skip HTTPS redirect in production k8s (TLS terminates at ingress)
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// Diagnostic endpoints
+app.MapGet("/api/version", () => Results.Ok(new
+{
+    version = appVersion,
+    apiAddress,
+    environment = app.Environment.EnvironmentName,
+    timestamp = DateTimeOffset.UtcNow
+}));
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()

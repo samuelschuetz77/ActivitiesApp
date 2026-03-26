@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activitiesapp-api
+  namespace: activitiesapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activitiesapp-api
+  template:
+    metadata:
+      labels:
+        app: activitiesapp-api
+    spec:
+      containers:
+        - name: api
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: DATABASE_PROVIDER
+              value: Postgres
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: activitiesdb
+            - name: POSTGRES_USER
+              value: activitiesapp
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: CosmosDb__Endpoint
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: COSMOS_ENDPOINT
+            - name: CosmosDb__Key
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: COSMOS_KEY
+            - name: GoogleMaps__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GOOGLE_MAPS_API_KEY
+            - name: APP_VERSION
+              value: "dev"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/version
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activitiesapp-api
+  namespace: activitiesapp
+spec:
+  selector:
+    app: activitiesapp-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

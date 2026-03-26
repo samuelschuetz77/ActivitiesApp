@@ -1,0 +1,129 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [master]
+
+env:
+  DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+  API_IMAGE: ${{ secrets.DOCKER_USERNAME }}/activitiesapp-api
+  WEB_IMAGE: ${{ secrets.DOCKER_USERNAME }}/activitiesapp-web
+
+jobs:
+  ci:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      sha_tag: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Build API
+        run: dotnet build ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release
+
+      - name: Build Web
+        run: dotnet build ActivitiesApp/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
+
+      - name: Compute SHA tag
+        id: tag
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & push API image
+        run: |
+          docker build -f ActivitiesApp.Api/Dockerfile -t ${{ env.API_IMAGE }}:${{ steps.tag.outputs.sha }} .
+          docker push ${{ env.API_IMAGE }}:${{ steps.tag.outputs.sha }}
+
+      - name: Build & push Web image
+        run: |
+          docker build -f ActivitiesApp/ActivitiesApp.Web/Dockerfile -t ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.sha }} .
+          docker push ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.sha }}
+
+  cd:
+    name: Deploy to Kubernetes
+    needs: ci
+    runs-on: self-hosted
+    env:
+      SHA_TAG: ${{ needs.ci.outputs.sha_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set KUBECONFIG
+        run: echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Verify cluster access
+        run: kubectl get nodes
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Create/update secrets
+        run: |
+          kubectl create secret generic app-secrets \
+            --namespace=activitiesapp \
+            --from-literal=POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}' \
+            --from-literal=COSMOS_ENDPOINT='${{ secrets.COSMOS_ENDPOINT }}' \
+            --from-literal=COSMOS_KEY='${{ secrets.COSMOS_KEY }}' \
+            --from-literal=GOOGLE_MAPS_API_KEY='${{ secrets.GOOGLE_MAPS_API_KEY }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/api.yaml
+          kubectl apply -f k8s/web.yaml
+
+      - name: Set deployment images
+        run: |
+          kubectl set image deployment/activitiesapp-api \
+            api=${{ env.API_IMAGE }}:${{ env.SHA_TAG }} \
+            --namespace=activitiesapp
+          kubectl set image deployment/activitiesapp-web \
+            web=${{ env.WEB_IMAGE }}:${{ env.SHA_TAG }} \
+            --namespace=activitiesapp
+
+      - name: Set APP_VERSION on deployments
+        run: |
+          kubectl set env deployment/activitiesapp-api APP_VERSION=${{ env.SHA_TAG }} --namespace=activitiesapp
+          kubectl set env deployment/activitiesapp-web APP_VERSION=${{ env.SHA_TAG }} --namespace=activitiesapp
+
+      - name: Wait for API rollout
+        run: kubectl rollout status deployment/activitiesapp-api --namespace=activitiesapp --timeout=120s
+
+      - name: Wait for Web rollout
+        run: kubectl rollout status deployment/activitiesapp-web --namespace=activitiesapp --timeout=120s
+
+      - name: Post-deploy status
+        if: always()
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods --namespace=activitiesapp
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc --namespace=activitiesapp
+          echo ""
+          echo "=== Ingress ==="
+          kubectl get ingress --namespace=activitiesapp
+          echo ""
+          echo "=== Events (last 5 min) ==="
+          kubectl get events --namespace=activitiesapp --sort-by='.lastTimestamp' | tail -20
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "=== API logs ==="
+          kubectl logs deployment/activitiesapp-api --namespace=activitiesapp --tail=50 || true
+          echo ""
+          echo "=== Web logs ==="
+          kubectl logs deployment/activitiesapp-web --namespace=activitiesapp --tail=50 || true

@@ -35,6 +35,7 @@ public static class MauiProgram
             var channel = GrpcChannel.ForAddress(apiAddress);
             return new ActivityService.ActivityServiceClient(channel);
         });
+        builder.Services.AddSingleton(apiAddress);
 
         // Local SQLite database
         builder.Services.AddDbContext<LocalDbContext>(options =>
