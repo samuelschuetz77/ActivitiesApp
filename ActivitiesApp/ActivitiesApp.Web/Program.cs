@@ -2,17 +2,13 @@ using ActivitiesApp.Web.Components;
 using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
-using ActivitiesApp.Protos;
-using Grpc.Net.Client;
 using Microsoft.AspNetCore.HttpOverrides;
-using Grpc.Net.Client.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Trust X-Forwarded-Proto from nginx ingress so Blazor component location hashes
-// are computed with the correct HTTPS scheme (pod runs HTTP but ingress terminates TLS).
+// Trust X-Forwarded-Proto from nginx ingress
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -29,38 +25,24 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ActivitiesApp.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
-// Configure gRPC client pointing to the API
+// Configure REST client pointing to the API (no gRPC — plain HTTP/1.1 JSON)
 var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
 
-builder.Services.AddSingleton(sp =>
+builder.Services.AddHttpClient<ActivityRestClient>(client =>
 {
-    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    var grpcLogger = loggerFactory.CreateLogger("GrpcWeb");
-    grpcLogger.LogInformation("Creating gRPC-Web channel to {ApiAddress}", apiAddress);
-
-    var handler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler());
-    var httpClient = new HttpClient(handler)
-    {
-        DefaultRequestVersion = new Version(1, 1),
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
-    };
-    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions
-    {
-        HttpClient = httpClient
-    });
-    return new ActivityService.ActivityServiceClient(channel);
+    client.BaseAddress = new Uri(apiAddress);
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddScoped<IActivityService>(sp =>
-    new ActivityGrpcClient(sp.GetRequiredService<ActivityService.ActivityServiceClient>(), apiAddress));
+builder.Services.AddScoped<IActivityService>(sp => sp.GetRequiredService<ActivityRestClient>());
 builder.Services.AddSingleton<LocationService>();
 
 var app = builder.Build();
 
 var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-logger.LogInformation("Web starting — Version={Version}, ApiAddress={ApiAddress}, Env={Env}",
+logger.LogInformation("Web starting — Version={Version}, ApiAddress={ApiAddress} (REST), Env={Env}",
     appVersion, apiAddress, app.Environment.EnvironmentName);
 
 app.UseForwardedHeaders();
@@ -89,6 +71,7 @@ app.MapGet("/api/version", () => Results.Ok(new
 {
     version = appVersion,
     apiAddress,
+    transport = "REST",
     environment = app.Environment.EnvironmentName,
     timestamp = DateTimeOffset.UtcNow
 }));
