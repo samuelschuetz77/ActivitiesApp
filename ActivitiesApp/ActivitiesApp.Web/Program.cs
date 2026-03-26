@@ -6,10 +6,20 @@ using ActivitiesApp.Protos;
 using Grpc.Net.Client;
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+// Trust X-Forwarded-Proto from nginx ingress so Blazor component location hashes
+// are computed with the correct HTTPS scheme (pod runs HTTP but ingress terminates TLS).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -51,6 +61,9 @@ startupLogger.LogInformation("Web started. Version={Version} ApiAddress={ApiAddr
     webVersion, apiAddress, app.Environment.EnvironmentName);
 
 app.MapDefaultEndpoints();
+
+// Must be first so all downstream middleware sees the correct scheme/host.
+app.UseForwardedHeaders();
 
 app.Use(async (context, next) =>
 {
