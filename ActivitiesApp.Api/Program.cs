@@ -95,7 +95,10 @@ using (var scope = app.Services.CreateScope())
 
 app.MapDefaultEndpoints();
 
-app.MapGrpcService<ActivityGrpcService>();
+// gRPC-Web so HTTP/1.1 callers (Blazor web) can reach gRPC services
+app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
+
+app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 app.MapGet("/", () => $"ActivitiesApp gRPC API is running (v{appVersion}, db={dbProvider}). Use a gRPC client to communicate.");
 
 // Diagnostic endpoints

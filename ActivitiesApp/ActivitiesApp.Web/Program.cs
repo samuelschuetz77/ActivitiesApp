@@ -5,7 +5,7 @@ using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.HttpOverrides;
-using System.Net.Http;
+using Grpc.Net.Client.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +16,7 @@ builder.AddServiceDefaults();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -32,17 +32,15 @@ var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
 
-AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 builder.Services.AddSingleton(sp =>
 {
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var grpcLogger = loggerFactory.CreateLogger("GrpcWeb");
+    grpcLogger.LogInformation("Creating gRPC-Web channel to {ApiAddress}", apiAddress);
+
     var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions
     {
-        HttpHandler = new SocketsHttpHandler
-        {
-            EnableMultipleHttp2Connections = true,
-            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-        }
+        HttpHandler = new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler())
     });
     return new ActivityService.ActivityServiceClient(channel);
 });
