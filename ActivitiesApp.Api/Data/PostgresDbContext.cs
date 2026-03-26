@@ -22,7 +22,9 @@ public class PostgresDbContext : DbContext, IActivityDbContext
             entity.Property(a => a.Name).HasColumnName("name").HasMaxLength(500);
             entity.Property(a => a.Description).HasColumnName("description");
             entity.Property(a => a.Cost).HasColumnName("cost");
-            entity.Property(a => a.Activitytime).HasColumnName("activitytime");
+            entity.Property(a => a.Activitytime)
+                .HasColumnName("activitytime")
+                .HasColumnType("timestamp without time zone");
             entity.Property(a => a.Latitude).HasColumnName("latitude");
             entity.Property(a => a.Longitude).HasColumnName("longitude");
             entity.Property(a => a.MinAge).HasColumnName("min_age");
@@ -48,6 +50,9 @@ public class PostgresDbContext : DbContext, IActivityDbContext
         {
             if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
             {
+                // Activitytime is an event/local wall-clock time, not an absolute instant.
+                // Normalize the kind so Npgsql writes it to "timestamp without time zone".
+                entry.Entity.Activitytime = DateTime.SpecifyKind(entry.Entity.Activitytime, DateTimeKind.Unspecified);
                 entry.Entity.UpdatedAt = now;
             }
         }
