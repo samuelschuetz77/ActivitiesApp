@@ -1,9 +1,10 @@
-**/bin
-**/obj
+**/.git
 **/.vs
 **/.vscode
+**/bin
+**/obj
 **/node_modules
-**/.git
-**/Kubernetes-reference-folder-seperate-project-dont-mix
+**/.dotnet
 **/ClaudeContextForOfflineCachingNotPartOFThisProjectDontMix
+**/.claude
 **/TestCosmos

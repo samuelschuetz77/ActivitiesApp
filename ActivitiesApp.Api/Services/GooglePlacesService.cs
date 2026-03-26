@@ -139,10 +139,23 @@ public class GooglePlacesService
         return address;
     }
 
+    /// <summary>
+    /// Fetches a Google Places photo server-side, keeping the API key hidden from clients.
+    /// </summary>
+    public async Task<byte[]?> FetchPhotoAsync(string photoReference, int maxWidth)
+    {
+        var url = $"https://maps.googleapis.com/maps/api/place/photo" +
+                  $"?maxwidth={maxWidth}&photoreference={Uri.EscapeDataString(photoReference)}&key={_apiKey}";
+
+        var response = await _http.GetAsync(url);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
     private string BuildPhotoUrl(string photoReference, int maxWidth)
     {
-        return $"https://maps.googleapis.com/maps/api/place/photo" +
-               $"?maxwidth={maxWidth}&photoreference={photoReference}&key={_apiKey}";
+        return $"/api/photos?r={Uri.EscapeDataString(photoReference)}&maxwidth={maxWidth}";
     }
 
     // ─── DTOs for Google API JSON responses ───

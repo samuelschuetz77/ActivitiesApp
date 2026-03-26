@@ -17,6 +17,7 @@ public class OfflineActivityService : IActivityService
     private readonly ActivityCacheService _cache;
     private readonly IConnectivity _connectivity;
     private readonly ILogger<OfflineActivityService> _logger;
+    private readonly string _apiBaseAddress;
 
     public OfflineActivityService(
         LocalDbContext db,
@@ -24,10 +25,12 @@ public class OfflineActivityService : IActivityService
         SyncService syncService,
         ActivityCacheService cache,
         IConnectivity connectivity,
-        ILogger<OfflineActivityService> logger)
+        ILogger<OfflineActivityService> logger,
+        string apiBaseAddress)
     {
         _db = db;
         _grpcClient = grpcClient;
+        _apiBaseAddress = apiBaseAddress.TrimEnd('/');
         _syncService = syncService;
         _cache = cache;
         _connectivity = connectivity;
@@ -174,7 +177,7 @@ public class OfflineActivityService : IActivityService
                 Longitude = result.Longitude,
                 Rating = result.Rating,
                 UserRatingsTotal = result.UserRatingsTotal,
-                PhotoUrl = result.PhotoUrl,
+                PhotoUrl = ResolveImageUrl(result.PhotoUrl) ?? "",
                 IsOpenNow = result.IsOpenNow,
                 Types = result.Types_.ToList(),
                 PriceLevel = result.PriceLevel
@@ -205,7 +208,7 @@ public class OfflineActivityService : IActivityService
                 UserRatingsTotal = response.UserRatingsTotal,
                 Latitude = response.Latitude,
                 Longitude = response.Longitude,
-                PhotoUrls = response.PhotoUrls.ToList(),
+                PhotoUrls = response.PhotoUrls.Select(u => ResolveImageUrl(u) ?? u).ToList(),
                 Reviews = response.Reviews.Select(r => new PlaceReviewData
                 {
                     AuthorName = r.AuthorName,
@@ -282,7 +285,7 @@ public class OfflineActivityService : IActivityService
         };
     }
 
-    private static Activity ToActivityFromResponse(ActivityResponse response)
+    private Activity ToActivityFromResponse(ActivityResponse response)
     {
         return new Activity
         {
@@ -297,9 +300,17 @@ public class OfflineActivityService : IActivityService
             MinAge = response.MinAge,
             MaxAge = response.MaxAge,
             Category = string.IsNullOrEmpty(response.Category) ? null : response.Category,
-            ImageUrl = string.IsNullOrEmpty(response.ImageUrl) ? null : response.ImageUrl,
+            ImageUrl = ResolveImageUrl(response.ImageUrl),
             PlaceId = string.IsNullOrEmpty(response.PlaceId) ? null : response.PlaceId,
             Rating = response.Rating
         };
+    }
+
+    private string? ResolveImageUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        if (url.StartsWith("/"))
+            return _apiBaseAddress + url;
+        return url;
     }
 }

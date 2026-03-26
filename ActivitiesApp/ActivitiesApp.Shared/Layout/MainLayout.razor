@@ -1,15 +1,17 @@
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 
-<div class="app-shell">
-    <header class="app-header">
-        <a class="app-brand" href="">
-            <span class="brand-name">ActivitiesApp</span>
-        </a>
+<div class="page">
+    <div class="sidebar">
         <NavMenu />
-    </header>
+    </div>
 
-    <main class="app-main">
-        <article class="app-content">
+    <main>
+        <div class="top-row px-4">
+            <span class="top-row-title">ActivitiesApp</span>
+            <a href="about">About</a>
+        </div>
+
+        <article class="content px-4">
             @Body
         </article>
     </main>

@@ -9,11 +9,11 @@ namespace ActivitiesApp.Api.Services;
 
 public class ActivityGrpcService : ActivityService.ActivityServiceBase
 {
-    private readonly AppDbContext _db;
+    private readonly IActivityDbContext _db;
     private readonly GooglePlacesService _places;
     private readonly ILogger<ActivityGrpcService> _logger;
 
-    public ActivityGrpcService(AppDbContext db, GooglePlacesService places, ILogger<ActivityGrpcService> logger)
+    public ActivityGrpcService(IActivityDbContext db, GooglePlacesService places, ILogger<ActivityGrpcService> logger)
     {
         _db = db;
         _places = places;
