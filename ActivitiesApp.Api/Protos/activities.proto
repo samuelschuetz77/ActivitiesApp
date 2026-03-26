@@ -24,6 +24,9 @@ service ActivityService {
   // Reverse geocode coordinates to an address
   rpc ReverseGeocode (ReverseGeocodeRequest) returns (ReverseGeocodeResponse);
 
+  // Resolve a US ZIP code to coordinates/address
+  rpc LookupZipCode (LookupZipCodeRequest) returns (LookupZipCodeResponse);
+
   // Delta sync — pull changes since a timestamp
   rpc PullChanges (PullChangesRequest) returns (stream ActivitySyncItem);
 
@@ -136,6 +139,16 @@ message ReverseGeocodeRequest {
 
 message ReverseGeocodeResponse {
   string formatted_address = 1;
+}
+
+message LookupZipCodeRequest {
+  string postal_code = 1;
+}
+
+message LookupZipCodeResponse {
+  double latitude = 1;
+  double longitude = 2;
+  string formatted_address = 3;
 }
 
 // ─── Delta Sync Messages ───

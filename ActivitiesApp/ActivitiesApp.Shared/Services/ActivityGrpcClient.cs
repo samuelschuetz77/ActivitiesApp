@@ -169,6 +169,27 @@ public class ActivityGrpcClient : IActivityService
         return response.FormattedAddress;
     }
 
+    public async Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode)
+    {
+        try
+        {
+            var response = await _client.LookupZipCodeAsync(
+                new LookupZipCodeRequest { PostalCode = zipCode });
+
+            return new ZipLookupResult
+            {
+                PostalCode = zipCode,
+                FormattedAddress = response.FormattedAddress,
+                Latitude = response.Latitude,
+                Longitude = response.Longitude
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     // ─── Mapping ───
 
     private Activity ToActivityModel(ActivityResponse response)

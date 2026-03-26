@@ -33,6 +33,14 @@ public class PlaceDetails
     public List<string> Types { get; set; } = [];
 }
 
+public class ZipLookupResult
+{
+    public string PostalCode { get; set; } = "";
+    public string FormattedAddress { get; set; } = "";
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+}
+
 public class PlaceReviewData
 {
     public string AuthorName { get; set; } = "";

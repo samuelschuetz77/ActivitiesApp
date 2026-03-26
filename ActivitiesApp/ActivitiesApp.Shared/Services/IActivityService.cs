@@ -16,4 +16,5 @@ public interface IActivityService
     Task<List<NearbyPlace>> SearchNearbyPlacesAsync(double lat, double lng, int radiusMeters, string? type = null, string? keyword = null);
     Task<PlaceDetails?> GetPlaceDetailsAsync(string placeId);
     Task<string> ReverseGeocodeAsync(double lat, double lng);
+    Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode);
 }

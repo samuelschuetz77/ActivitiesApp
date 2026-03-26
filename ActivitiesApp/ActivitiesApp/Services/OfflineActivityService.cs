@@ -237,6 +237,30 @@ public class OfflineActivityService : IActivityService
         return response.FormattedAddress;
     }
 
+    public async Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode)
+    {
+        if (_connectivity.NetworkAccess != NetworkAccess.Internet)
+            return null;
+
+        try
+        {
+            var response = await _grpcClient.LookupZipCodeAsync(
+                new LookupZipCodeRequest { PostalCode = zipCode });
+
+            return new ZipLookupResult
+            {
+                PostalCode = zipCode,
+                FormattedAddress = response.FormattedAddress,
+                Latitude = response.Latitude,
+                Longitude = response.Longitude
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     // ─── Mapping ───
 
     private static Activity ToSharedActivity(LocalActivity local)

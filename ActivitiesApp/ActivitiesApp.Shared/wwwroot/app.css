@@ -1,5 +1,6 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: #ffe4ec;
 }
 
 a, .btn-link {
@@ -61,6 +62,51 @@ h1:focus {
 .home-page {
     max-width: 1200px;
     margin: 0 auto;
+}
+
+.zip-search-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.zip-input {
+    min-width: 140px;
+    padding: 0.7rem 0.9rem;
+    border: 2px solid #efb6c7;
+    border-radius: 12px;
+    background: #fff8fb;
+}
+
+.zip-btn {
+    padding: 0.7rem 1rem;
+    border: none;
+    border-radius: 12px;
+    background: #d94f81;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.zip-btn.secondary {
+    background: #8d6d79;
+}
+
+.zip-status {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #6d3249;
+}
+
+.status-detail {
+    text-align: center;
+    margin-top: -2rem;
+    margin-bottom: 2rem;
+    color: #8a5569;
+    font-size: 0.95rem;
 }
 
 .home-location-row {

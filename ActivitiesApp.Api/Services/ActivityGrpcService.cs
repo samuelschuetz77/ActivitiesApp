@@ -313,6 +313,30 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         return new ReverseGeocodeResponse { FormattedAddress = address };
     }
 
+    public override async Task<LookupZipCodeResponse> LookupZipCode(
+        LookupZipCodeRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.PostalCode))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "postal_code is required"));
+        }
+
+        _logger.LogInformation("LookupZipCode requested for postal code {PostalCode}", request.PostalCode);
+        var result = await _places.GeocodePostalCodeAsync(request.PostalCode);
+
+        if (result == null)
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, $"ZIP code {request.PostalCode} not found"));
+        }
+
+        return new LookupZipCodeResponse
+        {
+            Latitude = result.Value.Latitude,
+            Longitude = result.Value.Longitude,
+            FormattedAddress = result.Value.FormattedAddress
+        };
+    }
+
     // ─── Delta Sync ───
 
     public override async Task PullChanges(

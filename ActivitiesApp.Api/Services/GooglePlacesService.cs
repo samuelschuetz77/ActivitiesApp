@@ -139,6 +139,34 @@ public class GooglePlacesService
         return address;
     }
 
+    public async Task<(double Latitude, double Longitude, string FormattedAddress)?> GeocodePostalCodeAsync(string postalCode)
+    {
+        var normalizedPostalCode = postalCode.Trim();
+        var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
+                  $"?components=postal_code:{Uri.EscapeDataString(normalizedPostalCode)}|country:US&key={_apiKey}";
+
+        _logger.LogInformation("Google ZIP geocode request for postal code {PostalCode}", normalizedPostalCode);
+        var response = await _http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadFromJsonAsync<GeocodeResponse>(JsonOptions);
+        var result = json?.Results?.FirstOrDefault();
+        var location = result?.Geometry?.Location;
+
+        if (location == null)
+        {
+            _logger.LogWarning("Google ZIP geocode returned no result for postal code {PostalCode}", normalizedPostalCode);
+            return null;
+        }
+
+        var address = result?.FormattedAddress ?? normalizedPostalCode;
+        _logger.LogInformation(
+            "Google ZIP geocode resolved {PostalCode} to ({Lat},{Lng}) {Address}",
+            normalizedPostalCode, location.Lat, location.Lng, address);
+
+        return (location.Lat, location.Lng, address);
+    }
+
     /// <summary>
     /// Fetches a Google Places photo server-side, keeping the API key hidden from clients.
     /// </summary>
@@ -168,6 +196,7 @@ public class GooglePlacesService
     public record GeocodeResult
     {
         public string? FormattedAddress { get; init; }
+        public GeometryData? Geometry { get; init; }
     }
 
     public record NearbySearchResponse
