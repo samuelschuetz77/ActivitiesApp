@@ -55,7 +55,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
-app.UseStatusCodePagesWithReExecute("/not-found");
+app.UseStatusCodePages();
 
 // Skip HTTPS redirect in production k8s (TLS terminates at ingress)
 if (app.Environment.IsDevelopment())
@@ -63,6 +63,7 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseStaticFiles();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
