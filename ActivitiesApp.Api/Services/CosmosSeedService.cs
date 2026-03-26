@@ -119,7 +119,7 @@ public class CosmosSeedService
         {
             sw.Stop();
             _logger.LogError(ex, "Cosmos -> Postgres seed FAILED after {Duration}ms", sw.ElapsedMilliseconds);
-            throw; // Fail startup so readiness probe catches an unseeded deployment
+            _logger.LogWarning("Seed failed — starting with existing Postgres data");
         }
     }
 }

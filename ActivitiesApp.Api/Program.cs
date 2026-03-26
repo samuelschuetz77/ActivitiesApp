@@ -73,9 +73,17 @@ using (var scope = app.Services.CreateScope())
         await pgContext.Database.EnsureCreatedAsync();
         startupLog.LogInformation("Postgres schema ensured");
 
-        // Seed from Cosmos -> Postgres
-        var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
-        await seedService.SeedAsync();
+        // Seed from Cosmos -> Postgres only if Postgres is empty
+        var hasData = await pgContext.Activities.AnyAsync();
+        if (!hasData)
+        {
+            var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
+            await seedService.SeedAsync();
+        }
+        else
+        {
+            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+        }
     }
     else
     {

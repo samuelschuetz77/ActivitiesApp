@@ -5,6 +5,7 @@ using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using ActivitiesApp.Protos;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,9 +32,18 @@ var apiAddress = builder.Configuration["Services:activitiesapp-api:https:0"]
     ?? builder.Configuration["ApiAddress"]
     ?? "https://localhost:7051";
 
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 builder.Services.AddSingleton(sp =>
 {
-    var channel = GrpcChannel.ForAddress(apiAddress);
+    var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions
+    {
+        HttpHandler = new SocketsHttpHandler
+        {
+            EnableMultipleHttp2Connections = true,
+            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        }
+    });
     return new ActivityService.ActivityServiceClient(channel);
 });
 builder.Services.AddScoped<IActivityService>(sp =>
