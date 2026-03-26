@@ -18,6 +18,9 @@ COPY ActivitiesApp/ActivitiesApp.Shared/ ActivitiesApp/ActivitiesApp.Shared/
 COPY ActivitiesApp.ServiceDefaults/ ActivitiesApp.ServiceDefaults/
 COPY ActivitiesApp.Api/Protos/ ActivitiesApp.Api/Protos/
 RUN dotnet publish ActivitiesApp/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release -o /app/publish --no-restore
+RUN mkdir -p /app/publish/wwwroot/_framework \
+    && cp ActivitiesApp/ActivitiesApp.Web/DockerAssets/_framework/blazor.server.js /app/publish/wwwroot/_framework/blazor.server.js \
+    && cp ActivitiesApp/ActivitiesApp.Web/DockerAssets/_framework/blazor.web.js /app/publish/wwwroot/_framework/blazor.web.js
 
 FROM base AS final
 WORKDIR /app
