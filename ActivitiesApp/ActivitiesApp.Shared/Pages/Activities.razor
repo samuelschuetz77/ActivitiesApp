@@ -1,34 +1,63 @@
 @page "/activities"
 @using ActivitiesApp.Shared.Models
 @using ActivitiesApp.Shared.Services
+@using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject ILogger<Activities> Logger
+@inject LocationService LocationService
+@implements IDisposable
 
 <div class="activities-page">
+    <!-- Search + Location Row -->
     <div class="search-row">
         <div class="search-container">
             <input type="text" class="search-input" placeholder="Search activities..."
                    @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
         </div>
-        <div class="zip-search-group">
-            <input class="zip-input" placeholder="Enter ZIP code" maxlength="5" @bind="zipCode" />
-            <button class="zip-btn" @onclick="ApplyZipCodeAsync">Use ZIP</button>
-            <button class="zip-btn secondary" @onclick="ClearZipCodeAsync">Use DB</button>
+        <div class="location-icon-wrapper">
+            <button class="location-btn @(hasActiveLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="10" r="3"/>
+                    <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 11.5 7.35 11.76a1 1 0 0 0 1.3 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8z"/>
+                </svg>
+            </button>
+            @if (showLocationPopup)
+            {
+                <div class="location-popup">
+                    @if (hasLocation)
+                    {
+                        @if (!string.IsNullOrEmpty(userAddress))
+                        {
+                            <p class="location-address">@userAddress</p>
+                        }
+                        else
+                        {
+                            <p class="location-address loading-text">Looking up address...</p>
+                        }
+                        <p class="location-coords">@userLat.ToString("0.0000"), @userLng.ToString("0.0000")</p>
+                    }
+                    else
+                    {
+                        <p class="location-address">GPS not available</p>
+                    }
+                    <div class="location-popup-edit">
+                        <input class="zip-input" placeholder="Enter ZIP code" maxlength="5"
+                               @bind="locationInput" @onkeyup="OnLocationInputKeyUp" />
+                        <button class="zip-btn" @onclick="ApplyManualLocationAsync">Apply</button>
+                    </div>
+                    @if (hasManualLocation)
+                    {
+                        <p class="location-override-label">Using: @manualLocationLabel</p>
+                    }
+                </div>
+            }
         </div>
     </div>
 
-    <div class="zip-status">
-        @if (hasZipLocation)
-        {
-            <span>Filtering around ZIP <strong>@activeZipCode</strong> near @resolvedLocationLabel</span>
-        }
-        else
-        {
-            <span>Showing database-backed activities without browser location.</span>
-        }
-    </div>
-
+    <!-- Filter Bar -->
     <div class="filter-bar">
         <div class="filter-item">
             <label>Radius</label>
@@ -151,18 +180,47 @@
     private string? statusMessage;
     private string? statusDetail;
     private bool isLoadingActivities;
-    private string zipCode = "";
-    private string? activeZipCode;
-    private string? resolvedLocationLabel;
-    private double zipLat;
-    private double zipLng;
-    private bool hasZipLocation => !string.IsNullOrWhiteSpace(activeZipCode);
+
+    // Location popup
+    private bool showLocationPopup;
+    private string? userAddress;
+    private string locationInput = "";
+
+    // Manual location override (ZIP entry)
+    private double manualLat;
+    private double manualLng;
+    private bool hasManualLocation;
+    private string? manualLocationLabel;
+
+    // GPS from service
+    private bool hasLocation => LocationService.HasLocation;
+    private double userLat => LocationService.Latitude;
+    private double userLng => LocationService.Longitude;
+
+    // Active location: manual override takes priority over GPS
+    private bool hasActiveLocation => hasManualLocation || hasLocation;
+    private double activeLat => hasManualLocation ? manualLat : userLat;
+    private double activeLng => hasManualLocation ? manualLng : userLng;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            LocationService.LocationChanged += OnLocationChanged;
+            LocationService.StartTracking(JS);
+
             await LoadActivities();
+        }
+    }
+
+    private async void OnLocationChanged()
+    {
+        if (!hasManualLocation)
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadActivities();
+            });
         }
     }
 
@@ -172,15 +230,14 @@
         statusDetail = null;
         try
         {
-            if (hasZipLocation)
+            if (hasActiveLocation)
             {
                 await DiscoverNearby();
             }
             else
             {
                 statusMessage = "Loading saved activities from the database...";
-                statusDetail = "Step 1/1: listing activities without ZIP-based discovery";
-                Logger.LogInformation("Activities page loading activities from DB fallback without ZIP code");
+                StateHasChanged();
                 allActivities = await ActivityService.ListActivitiesAsync();
                 statusMessage = null;
                 statusDetail = null;
@@ -192,9 +249,7 @@
             Logger.LogError(ex, "Activities page failed to load activities");
             allActivities = [];
             filteredActivities = [];
-            statusMessage = hasZipLocation
-                ? $"ZIP discovery failed for {activeZipCode}."
-                : "Database activity load failed.";
+            statusMessage = "Failed to load activities.";
             statusDetail = ex.Message;
         }
         finally
@@ -206,14 +261,13 @@
 
     private async Task DiscoverNearby()
     {
-        statusMessage = $"Discovering activities near ZIP {activeZipCode}...";
-        statusDetail = $"Step 2/2: calling API discovery at {zipLat:0.0000}, {zipLng:0.0000}";
+        statusMessage = "Discovering activities nearby...";
         StateHasChanged();
 
         var radiusMeters = (int)(selectedRadius * 1609.34);
-        Logger.LogInformation("Activities page discovering nearby activities for ZIP {ZipCode} at ({Lat},{Lng}) radius={RadiusMiles}mi",
-            activeZipCode, zipLat, zipLng, selectedRadius);
-        allActivities = await ActivityService.DiscoverActivitiesAsync(zipLat, zipLng, radiusMeters);
+        Logger.LogInformation("Activities page discovering nearby at ({Lat},{Lng}) radius={RadiusMiles}mi",
+            activeLat, activeLng, selectedRadius);
+        allActivities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters);
 
         statusMessage = null;
         statusDetail = null;
@@ -222,7 +276,7 @@
 
     private async Task OnRadiusChanged()
     {
-        if (hasZipLocation)
+        if (hasActiveLocation)
         {
             await DiscoverNearby();
         }
@@ -266,7 +320,7 @@
                 string.Equals(a.Category, selectedCategory, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (hasZipLocation)
+        if (hasActiveLocation)
         {
             query = query.Where(a => GetDistanceValue(a) <= selectedRadius);
         }
@@ -297,73 +351,77 @@
 
     private double GetDistanceValue(Activity activity)
     {
-        if (!hasZipLocation) return double.MaxValue;
+        if (!hasActiveLocation) return double.MaxValue;
 
         const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - zipLat);
-        var dLng = ToRad(activity.Longitude - zipLng);
+        var dLat = ToRad(activity.Latitude - activeLat);
+        var dLng = ToRad(activity.Longitude - activeLng);
         var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(zipLat)) * Math.Cos(ToRad(activity.Latitude)) *
+                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
                 Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         return R * c;
     }
 
     private string GetDistance(Activity activity) =>
-        hasZipLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
+        hasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
-    private async Task ApplyZipCodeAsync()
+    private async Task ToggleLocationPopup()
     {
-        var normalizedZip = (zipCode ?? string.Empty).Trim();
-        if (normalizedZip.Length != 5 || !normalizedZip.All(char.IsDigit))
+        showLocationPopup = !showLocationPopup;
+
+        if (showLocationPopup && hasLocation && string.IsNullOrEmpty(userAddress))
         {
-            statusMessage = "ZIP lookup failed.";
-            statusDetail = "Enter a 5-digit US ZIP code.";
-            return;
+            try
+            {
+                userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
+                StateHasChanged();
+            }
+            catch
+            {
+                userAddress = "Address unavailable";
+            }
         }
+    }
+
+    private async Task OnLocationInputKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyManualLocationAsync();
+        }
+    }
+
+    private async Task ApplyManualLocationAsync()
+    {
+        var input = (locationInput ?? string.Empty).Trim();
+        if (input.Length != 5 || !input.All(char.IsDigit)) return;
 
         try
         {
-            statusMessage = $"Resolving ZIP {normalizedZip}...";
-            statusDetail = "Step 1/2: asking Google Geocoding for ZIP coordinates";
-            StateHasChanged();
+            var lookup = await ActivityService.LookupZipCodeAsync(input);
+            if (lookup == null) return;
 
-            var zipLookup = await ActivityService.LookupZipCodeAsync(normalizedZip);
-            if (zipLookup == null)
-            {
-                statusMessage = $"ZIP lookup failed for {normalizedZip}.";
-                statusDetail = "Google returned no coordinates for that ZIP.";
-                return;
-            }
+            hasManualLocation = true;
+            manualLat = lookup.Latitude;
+            manualLng = lookup.Longitude;
+            manualLocationLabel = lookup.FormattedAddress;
+            showLocationPopup = false;
 
-            activeZipCode = normalizedZip;
-            zipLat = zipLookup.Latitude;
-            zipLng = zipLookup.Longitude;
-            resolvedLocationLabel = zipLookup.FormattedAddress;
-
-            Logger.LogInformation("Activities page resolved ZIP {ZipCode} to ({Lat},{Lng}) {Address}",
-                activeZipCode, zipLat, zipLng, resolvedLocationLabel);
+            Logger.LogInformation("Activities page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, manualLat, manualLng);
 
             await LoadActivities();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Activities page ZIP lookup failed for {ZipCode}", normalizedZip);
-            statusMessage = $"ZIP lookup failed for {normalizedZip}.";
-            statusDetail = ex.Message;
+            Logger.LogError(ex, "Activities page location lookup failed for {Input}", input);
         }
     }
 
-    private async Task ClearZipCodeAsync()
+    public void Dispose()
     {
-        activeZipCode = null;
-        resolvedLocationLabel = null;
-        zipLat = 0;
-        zipLng = 0;
-        statusMessage = null;
-        statusDetail = null;
-        await LoadActivities();
+        LocationService.LocationChanged -= OnLocationChanged;
     }
 }
