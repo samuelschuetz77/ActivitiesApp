@@ -17,7 +17,8 @@
       "Bash(dotnet build:*)",
       "Bash(git checkout:*)",
       "Bash(dotnet restore:*)",
-      "Bash(dotnet package:*)"
+      "Bash(dotnet package:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
