@@ -1,6 +1,6 @@
 using System;
 
-namespace ActivitiesApp.Api.Models
+namespace ActivitiesApp.Infrastructure.Models
 {
     public class Activity
     {

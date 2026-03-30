@@ -1,8 +1,8 @@
 using Grpc.Core;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.EntityFrameworkCore;
-using ActivitiesApp.Api.Data;
-using ActivitiesApp.Api.Models;
+using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Models;
 using ActivitiesApp.Protos;
 
 namespace ActivitiesApp.Api.Services;

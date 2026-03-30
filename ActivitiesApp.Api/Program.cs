@@ -1,4 +1,5 @@
-using ActivitiesApp.Api.Data;
+using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +28,8 @@ if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     }
 
     builder.Services.AddDbContext<PostgresDbContext>(options =>
-        options.UseNpgsql(connectionString));
+        options.UseNpgsql(connectionString, npgsql =>
+            npgsql.MigrationsAssembly("ActivitiesApp.Infrastructure.Migrations")));
 
     builder.Services.AddScoped<IActivityDbContext>(sp => sp.GetRequiredService<PostgresDbContext>());
 
@@ -70,8 +72,8 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
-        await pgContext.Database.EnsureCreatedAsync();
-        startupLog.LogInformation("Postgres schema ensured");
+        await pgContext.Database.MigrateAsync();
+        startupLog.LogInformation("Postgres migrations applied");
 
         // Seed from Cosmos -> Postgres only if Postgres is empty
         var hasData = await pgContext.Activities.AnyAsync();
@@ -140,7 +142,7 @@ app.MapGet("/api/activities/{id:guid}", async (Guid id, IActivityDbContext db) =
     return activity is null ? Results.NotFound() : Results.Ok(activity);
 });
 
-app.MapPost("/api/activities", async (ActivitiesApp.Api.Models.Activity activity, IActivityDbContext db) =>
+app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db) =>
 {
     activity.Id = Guid.NewGuid();
     db.Activities.Add(activity);
@@ -172,8 +174,8 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
         .GroupBy(a => a.PlaceId!)
         .ToDictionary(g => g.Key, g => g.First());
 
-    var results = new List<ActivitiesApp.Api.Models.Activity>();
-    var newActivities = new List<ActivitiesApp.Api.Models.Activity>();
+    var results = new List<ActivitiesApp.Infrastructure.Models.Activity>();
+    var newActivities = new List<ActivitiesApp.Infrastructure.Models.Activity>();
 
     foreach (var place in googlePlaces)
     {
@@ -185,7 +187,7 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
         }
         else
         {
-            var activity = new ActivitiesApp.Api.Models.Activity
+            var activity = new ActivitiesApp.Infrastructure.Models.Activity
             {
                 Id = Guid.NewGuid(),
                 Name = place.Name,

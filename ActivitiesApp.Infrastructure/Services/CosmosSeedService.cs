@@ -1,8 +1,10 @@
-using System.Diagnostics;
-using ActivitiesApp.Api.Data;
+using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
-namespace ActivitiesApp.Api.Services;
+namespace ActivitiesApp.Infrastructure.Services;
 
 public class CosmosSeedService
 {
@@ -48,7 +50,7 @@ public class CosmosSeedService
             foreach (var source in cosmosActivities)
             {
                 // Match by PlaceId first (preferred external identity), then by Id
-                Models.Activity? existing = null;
+                Activity? existing = null;
 
                 if (!string.IsNullOrEmpty(source.PlaceId) && pgByPlaceId.TryGetValue(source.PlaceId, out var byPlace))
                     existing = byPlace;
@@ -85,7 +87,7 @@ public class CosmosSeedService
                 else
                 {
                     // Insert new row — use the same Id from Cosmos
-                    _postgres.Activities.Add(new Models.Activity
+                    _postgres.Activities.Add(new Activity
                     {
                         Id = source.Id,
                         Name = source.Name,

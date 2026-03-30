@@ -18,7 +18,13 @@
       "Bash(git checkout:*)",
       "Bash(dotnet restore:*)",
       "Bash(dotnet package:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(dir:*)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet tool list:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet ef migrations list:*)"
     ]
   }
 }

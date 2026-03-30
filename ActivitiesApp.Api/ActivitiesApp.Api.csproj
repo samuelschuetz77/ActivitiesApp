@@ -14,11 +14,11 @@
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.64.0" />
     <PackageReference Include="Grpc.AspNetCore.Web" Version="2.64.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Cosmos" Version="10.0.5" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ActivitiesApp.Infrastructure\ActivitiesApp.Infrastructure.csproj" />
+    <ProjectReference Include="..\ActivitiesApp.Infrastructure.Migrations\ActivitiesApp.Infrastructure.Migrations.csproj" />
     <ProjectReference Include="..\ActivitiesApp.ServiceDefaults\ActivitiesApp.ServiceDefaults.csproj" />
   </ItemGroup>
 

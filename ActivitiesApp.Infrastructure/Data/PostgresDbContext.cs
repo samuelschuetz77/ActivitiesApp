@@ -1,7 +1,7 @@
-using ActivitiesApp.Api.Models;
+using ActivitiesApp.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace ActivitiesApp.Api.Data;
+namespace ActivitiesApp.Infrastructure.Data;
 
 public class PostgresDbContext : DbContext, IActivityDbContext
 {
