@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: activitiesapp
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    prune: true
+    datasources:
+      - name: prometheus
+        type: prometheus
+        uid: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+
+      - name: loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://loki:3100
+        editable: false
+
+      - name: tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo:3200
+        editable: false

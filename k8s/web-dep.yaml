@@ -25,6 +25,14 @@ spec:
               value: "http://activitiesapp-api:8080"
             - name: APP_VERSION
               value: "dev"
+            - name: OTEL_SERVICE_NAME
+              value: activitiesapp-web
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4317
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: grpc
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=kubernetes,service.namespace=activitiesapp
           resources:
             requests:
               memory: "256Mi"

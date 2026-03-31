@@ -2,9 +2,18 @@ using ActivitiesApp.Infrastructure.Data;
 using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
+using System.Diagnostics.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
+var appMeter = new Meter(builder.Environment.ApplicationName);
+var activitiesCreatedCounter = appMeter.CreateCounter<long>(
+    "activities_created_total",
+    unit: "{activity}",
+    description: "Number of activities created through the API");
 
 builder.AddServiceDefaults();
 
@@ -76,6 +85,17 @@ using (var scope = app.Services.CreateScope())
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
         await pgContext.Database.MigrateAsync();
         startupLog.LogInformation("Postgres migrations applied");
+
+        try
+        {
+            await pgContext.Activities.AnyAsync();
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            startupLog.LogWarning(ex, "Postgres schema missing after migrations; creating tables directly from the EF model");
+            var databaseCreator = pgContext.GetService<IRelationalDatabaseCreator>();
+            await databaseCreator.CreateTablesAsync();
+        }
 
         // Seed from Cosmos -> Postgres only if Postgres is empty
         var hasData = await pgContext.Activities.AnyAsync();
@@ -152,6 +172,8 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     activity.Id = Guid.NewGuid();
     db.Activities.Add(activity);
     await db.SaveChangesAsync();
+    activitiesCreatedCounter.Add(1,
+        new KeyValuePair<string, object?>("creation_source", "manual"));
     return Results.Created($"/api/activities/{activity.Id}", activity);
 });
 
