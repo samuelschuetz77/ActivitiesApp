@@ -13,6 +13,17 @@ public class LocationService : IDisposable
     public bool HasLocation { get; private set; }
     public string? LastError { get; private set; }
 
+    // Manual location override (ZIP entry) — persists across page navigation
+    public double ManualLatitude { get; private set; }
+    public double ManualLongitude { get; private set; }
+    public bool HasManualLocation { get; private set; }
+    public string? ManualLocationLabel { get; private set; }
+
+    // Convenience: manual override takes priority over GPS
+    public bool HasActiveLocation => HasManualLocation || HasLocation;
+    public double ActiveLatitude => HasManualLocation ? ManualLatitude : Latitude;
+    public double ActiveLongitude => HasManualLocation ? ManualLongitude : Longitude;
+
     public event Action? LocationChanged;
 
     public LocationService(ILogger<LocationService> logger)
@@ -61,6 +72,26 @@ public class LocationService : IDisposable
             _logger.LogWarning(ex, "Failed to get location");
             LocationChanged?.Invoke();
         }
+    }
+
+    public void SetManualLocation(double lat, double lng, string label)
+    {
+        ManualLatitude = lat;
+        ManualLongitude = lng;
+        ManualLocationLabel = label;
+        HasManualLocation = true;
+        _logger.LogInformation("Manual location set to ({Lat},{Lng}) — {Label}", lat, lng, label);
+        LocationChanged?.Invoke();
+    }
+
+    public void ClearManualLocation()
+    {
+        HasManualLocation = false;
+        ManualLatitude = 0;
+        ManualLongitude = 0;
+        ManualLocationLabel = null;
+        _logger.LogInformation("Manual location cleared, reverting to GPS");
+        LocationChanged?.Invoke();
     }
 
     public void Dispose()

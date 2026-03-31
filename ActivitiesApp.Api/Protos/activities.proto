@@ -27,6 +27,9 @@ service ActivityService {
   // Resolve a US ZIP code to coordinates/address
   rpc LookupZipCode (LookupZipCodeRequest) returns (LookupZipCodeResponse);
 
+  // Geocode a full street address to coordinates
+  rpc GeocodeAddress (GeocodeAddressRequest) returns (GeocodeAddressResponse);
+
   // Delta sync — pull changes since a timestamp
   rpc PullChanges (PullChangesRequest) returns (stream ActivitySyncItem);
 
@@ -146,6 +149,16 @@ message LookupZipCodeRequest {
 }
 
 message LookupZipCodeResponse {
+  double latitude = 1;
+  double longitude = 2;
+  string formatted_address = 3;
+}
+
+message GeocodeAddressRequest {
+  string address = 1;
+}
+
+message GeocodeAddressResponse {
   double latitude = 1;
   double longitude = 2;
   string formatted_address = 3;

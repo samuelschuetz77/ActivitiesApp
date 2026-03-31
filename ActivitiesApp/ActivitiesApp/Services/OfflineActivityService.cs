@@ -37,6 +37,8 @@ public class OfflineActivityService : IActivityService
         _logger = logger;
     }
 
+    public event Action? DataChanged;
+
     // ─── Activity CRUD (offline-first, cache-backed) ───
 
     public async Task<Activity> CreateActivityAsync(Activity activity)
@@ -99,9 +101,12 @@ public class OfflineActivityService : IActivityService
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        // Return cached data immediately
-        var cached = _cache.GetAll();
-        _logger.LogDebug("DiscoverActivitiesAsync: returning {Count} cached items in {Ms}ms", cached.Count, sw.ElapsedMilliseconds);
+        // Return cached data filtered by distance
+        var radiusMiles = radiusMeters / 1609.34;
+        var cached = _cache.GetAll()
+            .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
+            .ToList();
+        _logger.LogDebug("DiscoverActivitiesAsync: returning {Count} cached items within {Radius}mi in {Ms}ms", cached.Count, radiusMiles, sw.ElapsedMilliseconds);
 
         if (_connectivity.NetworkAccess == NetworkAccess.Internet)
         {
@@ -135,6 +140,7 @@ public class OfflineActivityService : IActivityService
 
                     await _db.SaveChangesAsync();
                     _logger.LogInformation("DiscoverActivities background refresh complete");
+                    DataChanged?.Invoke();
                 }
                 catch (Exception ex)
                 {
@@ -261,6 +267,29 @@ public class OfflineActivityService : IActivityService
         }
     }
 
+    public async Task<ZipLookupResult?> GeocodeAddressAsync(string address)
+    {
+        if (_connectivity.NetworkAccess != NetworkAccess.Internet)
+            return null;
+
+        try
+        {
+            var response = await _grpcClient.GeocodeAddressAsync(
+                new GeocodeAddressRequest { Address = address });
+
+            return new ZipLookupResult
+            {
+                FormattedAddress = response.FormattedAddress,
+                Latitude = response.Latitude,
+                Longitude = response.Longitude
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     // ─── Mapping ───
 
     private static Activity ToSharedActivity(LocalActivity local)
@@ -336,5 +365,17 @@ public class OfflineActivityService : IActivityService
         if (url.StartsWith("/"))
             return _apiBaseAddress + url;
         return url;
+    }
+
+    private static double GetDistanceMiles(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double R = 3958.8;
+        var dLat = (lat2 - lat1) * Math.PI / 180.0;
+        var dLng = (lng2 - lng1) * Math.PI / 180.0;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return R * c;
     }
 }

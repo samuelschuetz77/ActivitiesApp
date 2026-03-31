@@ -92,5 +92,21 @@ public class ActivityRestClient : IActivityService
         }
     }
 
+    public event Action? DataChanged;
+
+    public async Task<ZipLookupResult?> GeocodeAddressAsync(string address)
+    {
+        try
+        {
+            var result = await _http.GetFromJsonAsync<ZipLookupResult>(
+                $"/api/geocode/address?address={Uri.EscapeDataString(address)}");
+            return result;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     private record ReverseGeocodeResult(string FormattedAddress);
 }

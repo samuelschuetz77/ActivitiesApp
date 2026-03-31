@@ -160,7 +160,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
                     MinAge = 0,
                     MaxAge = 99,
                     Category = category,
-                    ImageUrl = place.PhotoUrl,
+                    ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
                     PlaceId = place.PlaceId,
                     Rating = place.Rating
                 };
@@ -330,6 +330,30 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         }
 
         return new LookupZipCodeResponse
+        {
+            Latitude = result.Value.Latitude,
+            Longitude = result.Value.Longitude,
+            FormattedAddress = result.Value.FormattedAddress
+        };
+    }
+
+    public override async Task<GeocodeAddressResponse> GeocodeAddress(
+        GeocodeAddressRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.Address))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "address is required"));
+        }
+
+        _logger.LogInformation("GeocodeAddress requested for {Address}", request.Address);
+        var result = await _places.GeocodeAddressAsync(request.Address);
+
+        if (result == null)
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, $"Address '{request.Address}' not found"));
+        }
+
+        return new GeocodeAddressResponse
         {
             Latitude = result.Value.Latitude,
             Longitude = result.Value.Longitude,

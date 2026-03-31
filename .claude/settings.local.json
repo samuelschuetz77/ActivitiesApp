@@ -24,7 +24,10 @@
       "Bash(dotnet tool list:*)",
       "Bash(dotnet tool install:*)",
       "Bash(dotnet ef migrations add:*)",
-      "Bash(dotnet ef migrations list:*)"
+      "Bash(dotnet ef migrations list:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

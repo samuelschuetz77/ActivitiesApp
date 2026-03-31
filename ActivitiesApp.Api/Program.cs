@@ -2,11 +2,13 @@ using ActivitiesApp.Infrastructure.Data;
 using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+builder.Services.AddMemoryCache();
 builder.Services.AddGrpc();
 
 // Determine database provider from environment
@@ -133,13 +135,16 @@ app.MapGet("/api/health/db", async (IServiceProvider sp) =>
 app.MapGet("/api/activities", async (IActivityDbContext db) =>
 {
     var activities = await db.Activities.Where(a => !a.IsDeleted).ToListAsync();
+    foreach (var a in activities) FixImageUrl(a);
     return Results.Ok(activities);
 });
 
 app.MapGet("/api/activities/{id:guid}", async (Guid id, IActivityDbContext db) =>
 {
     var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id);
-    return activity is null ? Results.NotFound() : Results.Ok(activity);
+    if (activity is null) return Results.NotFound();
+    FixImageUrl(activity);
+    return Results.Ok(activity);
 });
 
 app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db) =>
@@ -183,6 +188,7 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
 
         if (existingByPlaceId.TryGetValue(place.PlaceId, out var existing))
         {
+            FixImageUrl(existing);
             results.Add(existing);
         }
         else
@@ -202,7 +208,7 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
                 Category = place.Types.Any(t => t is "park" or "campground") ? "Outdoors"
                     : place.Types.Any(t => t is "restaurant" or "cafe" or "food") ? "Food"
                     : "Social",
-                ImageUrl = place.PhotoUrl,
+                ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
                 PlaceId = place.PlaceId,
                 Rating = place.Rating
             };
@@ -248,17 +254,74 @@ app.MapGet("/api/geocode/zip/{zipCode}", async (string zipCode, GooglePlacesServ
     return Results.Ok(new { latitude = result.Value.Latitude, longitude = result.Value.Longitude, formattedAddress = result.Value.FormattedAddress });
 });
 
-// Photo proxy — serves Google Places photos without exposing the API key to browsers
-app.MapGet("/api/photos", async (string r, int? maxwidth, GooglePlacesService places, HttpContext ctx) =>
+app.MapGet("/api/geocode/address", async (string address, GooglePlacesService places) =>
 {
-    var photoRef = r;
+    var result = await places.GeocodeAddressAsync(address);
+    if (result is null) return Results.NotFound();
+    return Results.Ok(new { latitude = result.Value.Latitude, longitude = result.Value.Longitude, formattedAddress = result.Value.FormattedAddress });
+});
+
+// Legacy photo proxy — serves Google Places photos by raw photo reference
+app.MapGet("/api/photos", async (string r, int? maxwidth, GooglePlacesService places, IMemoryCache cache) =>
+{
     var width = maxwidth ?? 400;
+    var cacheKey = $"photo_ref:{r}:{width}";
+
+    if (cache.TryGetValue(cacheKey, out byte[]? cached) && cached != null)
+        return Results.File(cached, "image/jpeg");
+
+    var imageBytes = await places.FetchPhotoAsync(r, width);
+    if (imageBytes is null)
+        return Results.NotFound();
+
+    cache.Set(cacheKey, imageBytes, TimeSpan.FromHours(24));
+    return Results.File(imageBytes, "image/jpeg");
+});
+
+// Place-based photo endpoint — uses PlaceId (never expires) to get fresh photos
+app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, GooglePlacesService places, IMemoryCache cache) =>
+{
+    var width = maxwidth ?? 400;
+    var cacheKey = $"photo_place:{placeId}:{width}";
+
+    if (cache.TryGetValue(cacheKey, out byte[]? cached) && cached != null)
+        return Results.File(cached, "image/jpeg");
+
+    // Get fresh photo reference from Google Place Details
+    var details = await places.GetPlaceDetailsAsync(placeId);
+    var photoUrl = details?.PhotoUrls?.FirstOrDefault();
+    if (photoUrl is null)
+        return Results.NotFound();
+
+    // photoUrl is "/api/photos?r={ref}&maxwidth=800" — extract the reference
+    var uri = new Uri(photoUrl, UriKind.Relative);
+    var query = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
+    var photoRef = query["r"];
+    if (string.IsNullOrEmpty(photoRef))
+        return Results.NotFound();
 
     var imageBytes = await places.FetchPhotoAsync(photoRef, width);
     if (imageBytes is null)
         return Results.NotFound();
 
+    cache.Set(cacheKey, imageBytes, TimeSpan.FromHours(24));
     return Results.File(imageBytes, "image/jpeg");
 });
+
+// Ensures ImageUrl uses the place-based endpoint (never expires) when a PlaceId is available
+void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
+{
+    // If we have a PlaceId, always use the place-based endpoint
+    if (!string.IsNullOrEmpty(activity.PlaceId))
+    {
+        activity.ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(activity.PlaceId)}?maxwidth=400";
+        return;
+    }
+    if (string.IsNullOrEmpty(activity.ImageUrl)) return;
+    // Already a valid URL
+    if (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")) return;
+    // Raw Google photo reference — convert to proxy URL (legacy fallback)
+    activity.ImageUrl = $"/api/photos?r={Uri.EscapeDataString(activity.ImageUrl)}&maxwidth=400";
+}
 
 app.Run();

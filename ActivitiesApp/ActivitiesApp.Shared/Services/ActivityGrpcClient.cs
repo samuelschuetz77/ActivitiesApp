@@ -190,6 +190,28 @@ public class ActivityGrpcClient : IActivityService
         }
     }
 
+    public event Action? DataChanged;
+
+    public async Task<ZipLookupResult?> GeocodeAddressAsync(string address)
+    {
+        try
+        {
+            var response = await _client.GeocodeAddressAsync(
+                new GeocodeAddressRequest { Address = address });
+
+            return new ZipLookupResult
+            {
+                FormattedAddress = response.FormattedAddress,
+                Latitude = response.Latitude,
+                Longitude = response.Longitude
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     // ─── Mapping ───
 
     private Activity ToActivityModel(ActivityResponse response)

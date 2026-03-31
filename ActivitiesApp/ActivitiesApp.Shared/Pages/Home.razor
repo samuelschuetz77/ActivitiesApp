@@ -45,12 +45,20 @@
                     }
                     <div class="location-popup-edit">
                         <input class="zip-input" placeholder="Enter ZIP code" maxlength="5"
-                               @bind="locationInput" @onkeyup="OnLocationInputKeyUp" />
+                               @bind="locationInput" @bind:event="oninput" @onkeyup="OnLocationInputKeyUp" />
                         <button class="zip-btn" @onclick="ApplyManualLocationAsync">Apply</button>
                     </div>
+                    @if (locationError != null)
+                    {
+                        <p class="location-error" style="color:red;font-size:0.85em;margin:4px 0;">@locationError</p>
+                    }
+                    @if (hasManualLocation && hasLocation)
+                    {
+                        <button class="zip-btn" style="margin-top:6px;width:100%;" @onclick="UseCurrentLocation">Use Current Location</button>
+                    }
                     @if (hasManualLocation)
                     {
-                        <p class="location-override-label">Using: @manualLocationLabel</p>
+                        <p class="location-override-label">Using: @LocationService.ManualLocationLabel</p>
                     }
                 </div>
             }
@@ -69,12 +77,16 @@
                         <div class="card-image">
                             @if (!string.IsNullOrEmpty(activity.ImageUrl))
                             {
-                                <img src="@activity.ImageUrl" alt="@activity.Name" />
+                                <img src="@activity.ImageUrl" alt="@activity.Name"
+                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                <div class="image-placeholder" style="display:none;">
+                                    <span>@GetCategoryIcon(activity.Category)</span>
+                                </div>
                             }
                             else
                             {
                                 <div class="image-placeholder">
-                                    <span>No Image</span>
+                                    <span>@GetCategoryIcon(activity.Category)</span>
                                 </div>
                             }
                             @if (!string.IsNullOrEmpty(activity.Category))
@@ -126,18 +138,22 @@
         else
         {
             <div class="cards-grid">
-                @foreach (var activity in nearbyActivities.Take(10))
+                @foreach (var activity in nearbyActivities.Take(70))
                 {
                     <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
                         <div class="card-image">
                             @if (!string.IsNullOrEmpty(activity.ImageUrl))
                             {
-                                <img src="@activity.ImageUrl" alt="@activity.Name" />
+                                <img src="@activity.ImageUrl" alt="@activity.Name"
+                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                <div class="image-placeholder" style="display:none;">
+                                    <span>@GetCategoryIcon(activity.Category)</span>
+                                </div>
                             }
                             else
                             {
                                 <div class="image-placeholder">
-                                    <span>No Image</span>
+                                    <span>@GetCategoryIcon(activity.Category)</span>
                                 </div>
                             }
                             @if (!string.IsNullOrEmpty(activity.Category))
@@ -182,33 +198,41 @@
     private bool showLocationPopup;
     private string? userAddress;
     private string locationInput = "";
-
-    // Manual location override (ZIP entry)
-    private double manualLat;
-    private double manualLng;
-    private bool hasManualLocation;
-    private string? manualLocationLabel;
+    private string? locationError;
 
     // GPS from service
     private bool hasLocation => LocationService.HasLocation;
     private double userLat => LocationService.Latitude;
     private double userLng => LocationService.Longitude;
 
-    // Active location: manual override takes priority over GPS
-    private bool hasActiveLocation => hasManualLocation || hasLocation;
-    private double activeLat => hasManualLocation ? manualLat : userLat;
-    private double activeLng => hasManualLocation ? manualLng : userLng;
+    // Manual + active location from shared singleton
+    private bool hasManualLocation => LocationService.HasManualLocation;
+    private bool hasActiveLocation => LocationService.HasActiveLocation;
+    private double activeLat => LocationService.ActiveLatitude;
+    private double activeLng => LocationService.ActiveLongitude;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             LocationService.LocationChanged += OnLocationChanged;
+            ActivityService.DataChanged += OnDataChanged;
             LocationService.StartTracking(JS);
 
             await LoadRecentlyViewed();
             await LoadNearbyActivities();
         }
+    }
+
+    private async void OnDataChanged()
+    {
+        // Re-read from cache without triggering another discover (avoids loop)
+        await InvokeAsync(async () =>
+        {
+            var radiusMeters = (int)(10 * 1609.34);
+            nearbyActivities = await ActivityService.ListActivitiesAsync();
+            StateHasChanged();
+        });
     }
 
     private async void OnLocationChanged()
@@ -324,6 +348,18 @@
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
+    private static string GetCategoryIcon(string? category) => category switch
+    {
+        "Outdoors" => "\ud83c\udf32",
+        "Sports" => "\u26bd",
+        "Arts" => "\ud83c\udfa8",
+        "Food" => "\ud83c\udf54",
+        "Music" => "\ud83c\udfb5",
+        "Education" => "\ud83d\udcda",
+        "Social" => "\ud83c\udf89",
+        _ => "\ud83d\udccd"
+    };
+
     private async Task ToggleLocationPopup()
     {
         showLocationPopup = !showLocationPopup;
@@ -352,32 +388,47 @@
 
     private async Task ApplyManualLocationAsync()
     {
+        locationError = null;
         var input = (locationInput ?? string.Empty).Trim();
-        if (input.Length != 5 || !input.All(char.IsDigit)) return;
+        if (input.Length != 5 || !input.All(char.IsDigit))
+        {
+            locationError = "Enter a valid 5-digit ZIP code";
+            return;
+        }
 
         try
         {
             var lookup = await ActivityService.LookupZipCodeAsync(input);
-            if (lookup == null) return;
+            if (lookup == null)
+            {
+                locationError = "ZIP code not found";
+                return;
+            }
 
-            hasManualLocation = true;
-            manualLat = lookup.Latitude;
-            manualLng = lookup.Longitude;
-            manualLocationLabel = lookup.FormattedAddress;
+            LocationService.SetManualLocation(lookup.Latitude, lookup.Longitude, lookup.FormattedAddress);
             showLocationPopup = false;
 
-            Logger.LogInformation("Home page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, manualLat, manualLng);
+            Logger.LogInformation("Home page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, activeLat, activeLng);
 
             await LoadNearbyActivities();
         }
         catch (Exception ex)
         {
+            locationError = "Location lookup failed";
             Logger.LogError(ex, "Home page location lookup failed for {Input}", input);
         }
+    }
+
+    private async Task UseCurrentLocation()
+    {
+        LocationService.ClearManualLocation();
+        showLocationPopup = false;
+        await LoadNearbyActivities();
     }
 
     public void Dispose()
     {
         LocationService.LocationChanged -= OnLocationChanged;
+        ActivityService.DataChanged -= OnDataChanged;
     }
 }

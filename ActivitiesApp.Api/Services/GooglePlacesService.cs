@@ -139,6 +139,31 @@ public class GooglePlacesService
         return address;
     }
 
+    public async Task<(double Latitude, double Longitude, string FormattedAddress)?> GeocodeAddressAsync(string address)
+    {
+        var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
+                  $"?address={Uri.EscapeDataString(address)}&key={_apiKey}";
+
+        _logger.LogInformation("Google address geocode request for {Address}", address);
+        var response = await _http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadFromJsonAsync<GeocodeResponse>(JsonOptions);
+        var result = json?.Results?.FirstOrDefault();
+        var location = result?.Geometry?.Location;
+
+        if (location == null)
+        {
+            _logger.LogWarning("Google address geocode returned no result for {Address}", address);
+            return null;
+        }
+
+        var formatted = result?.FormattedAddress ?? address;
+        _logger.LogInformation("Google address geocode resolved to ({Lat},{Lng}) {FormattedAddress}",
+            location.Lat, location.Lng, formatted);
+        return (location.Lat, location.Lng, formatted);
+    }
+
     public async Task<(double Latitude, double Longitude, string FormattedAddress)?> GeocodePostalCodeAsync(string postalCode)
     {
         var normalizedPostalCode = postalCode.Trim();

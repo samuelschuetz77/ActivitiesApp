@@ -4,6 +4,9 @@ namespace ActivitiesApp.Shared.Services;
 
 public interface IActivityService
 {
+    // Fired when background data refresh completes (e.g. new images loaded)
+    event Action? DataChanged;
+
     // Activity CRUD
     Task<Activity> CreateActivityAsync(Activity activity);
     Task<Activity?> GetActivityAsync(Guid id);
@@ -17,4 +20,7 @@ public interface IActivityService
     Task<PlaceDetails?> GetPlaceDetailsAsync(string placeId);
     Task<string> ReverseGeocodeAsync(double lat, double lng);
     Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode);
+
+    // Geocode a full address to coordinates
+    Task<ZipLookupResult?> GeocodeAddressAsync(string address);
 }

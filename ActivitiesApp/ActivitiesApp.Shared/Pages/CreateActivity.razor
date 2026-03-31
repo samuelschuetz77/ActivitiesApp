@@ -1,7 +1,10 @@
 @page "/create"
 @using ActivitiesApp.Shared.Services
 @using ActivitiesApp.Shared.Models
+@using Microsoft.AspNetCore.Components.Forms
 @inject IActivityService ActivityService
+@inject NavigationManager Navigation
+@inject ILogger<CreateActivity> Logger
 
 <PageTitle>Create Activity</PageTitle>
 
@@ -15,11 +18,6 @@
         <div class="mb-3">
             <label>Name:</label>
             <InputText @bind-Value="newActivity.Name" class="form-control" />
-        </div>
-
-        <div class="mb-3">
-            <label>City:</label>
-            <InputText @bind-Value="newActivity.City" class="form-control" />
         </div>
 
         <div class="mb-3">
@@ -37,14 +35,29 @@
             <InputDate @bind-Value="newActivity.Activitytime" Type="InputDateType.DateTimeLocal" class="form-control" />
         </div>
 
+        <!-- Address Fields (replaces Lat/Lng) -->
+        <div class="mb-3">
+            <label>Street Address:</label>
+            <InputText @bind-Value="streetAddress" class="form-control" placeholder="123 Main St" />
+        </div>
+
+        <div class="mb-3">
+            <label>Apt / Suite (optional):</label>
+            <InputText @bind-Value="aptSuite" class="form-control" placeholder="Apt 4B" />
+        </div>
+
         <div class="mb-3 row">
             <div class="col">
-                <label>Latitude:</label>
-                <InputNumber @bind-Value="newActivity.Latitude" class="form-control" />
+                <label>City:</label>
+                <InputText @bind-Value="newActivity.City" class="form-control" />
             </div>
-            <div class="col">
-                <label>Longitude:</label>
-                <InputNumber @bind-Value="newActivity.Longitude" class="form-control" />
+            <div class="col-3">
+                <label>State:</label>
+                <InputText @bind-Value="stateField" class="form-control" placeholder="TX" maxlength="2" />
+            </div>
+            <div class="col-3">
+                <label>ZIP Code:</label>
+                <InputText @bind-Value="zipCode" class="form-control" placeholder="75001" maxlength="5" />
             </div>
         </div>
 
@@ -73,8 +86,39 @@
             </InputSelect>
         </div>
 
-        <button type="submit" class="btn btn-primary">Create Activity</button>
+        <!-- Image Upload (up to 5) -->
+        <div class="mb-3">
+            <label>Images (up to 5):</label>
+            <InputFile OnChange="OnImagesSelected" multiple accept="image/*" class="form-control" />
+            @if (imagePreviews.Count > 0)
+            {
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    @for (int i = 0; i < imagePreviews.Count; i++)
+                    {
+                        var idx = i;
+                        <div style="position:relative;">
+                            <img src="@imagePreviews[idx]" alt="Preview" style="width:100px;height:100px;object-fit:cover;border-radius:6px;" />
+                            <button type="button" @onclick="() => RemoveImage(idx)"
+                                    style="position:absolute;top:-6px;right:-6px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1;">X</button>
+                        </div>
+                    }
+                </div>
+            }
+            @if (imageError != null)
+            {
+                <p style="color:red;font-size:0.85em;margin-top:4px;">@imageError</p>
+            }
+        </div>
+
+        <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+            @(isSubmitting ? "Creating..." : "Create Activity")
+        </button>
     </EditForm>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mt-3">@errorMessage</div>
+    }
 
     @if (!string.IsNullOrEmpty(successMessage))
     {
@@ -85,13 +129,129 @@
 @code {
     private Activity newActivity { get; set; } = new Activity() { Activitytime = DateTime.UtcNow };
     private string? successMessage;
+    private string? errorMessage;
+    private bool isSubmitting;
+
+    // Address fields
+    private string streetAddress = "";
+    private string aptSuite = "";
+    private string stateField = "";
+    private string zipCode = "";
+
+    // Image upload
+    private List<string> imagePreviews = new();
+    private string? imageError;
+    private const int MaxImages = 5;
+    private const long MaxFileSize = 5 * 1024 * 1024; // 5MB per image
+
+    private async Task OnImagesSelected(InputFileChangeEventArgs e)
+    {
+        imageError = null;
+
+        var files = e.GetMultipleFiles(MaxImages + imagePreviews.Count);
+        if (imagePreviews.Count + files.Count > MaxImages)
+        {
+            imageError = $"Maximum {MaxImages} images allowed.";
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            if (file.Size > MaxFileSize)
+            {
+                imageError = $"'{file.Name}' exceeds 5MB limit.";
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(MaxFileSize);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var base64 = Convert.ToBase64String(ms.ToArray());
+                var dataUrl = $"data:{file.ContentType};base64,{base64}";
+                imagePreviews.Add(dataUrl);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to read image {Name}", file.Name);
+                imageError = $"Failed to read '{file.Name}'.";
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void RemoveImage(int index)
+    {
+        if (index >= 0 && index < imagePreviews.Count)
+        {
+            imagePreviews.RemoveAt(index);
+            imageError = null;
+        }
+    }
 
     private async Task HandleValidSubmit()
     {
-        var created = await ActivityService.CreateActivityAsync(newActivity);
-        successMessage = $"Activity '{created.Name}' in '{created.City}' saved successfully!";
+        errorMessage = null;
+        successMessage = null;
+        isSubmitting = true;
+        StateHasChanged();
 
-        // Reset the form
-        newActivity = new Activity() { Activitytime = DateTime.UtcNow };
+        try
+        {
+            // Build address string and geocode
+            var addressParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(streetAddress)) addressParts.Add(streetAddress.Trim());
+            if (!string.IsNullOrWhiteSpace(aptSuite)) addressParts.Add(aptSuite.Trim());
+            if (!string.IsNullOrWhiteSpace(newActivity.City)) addressParts.Add(newActivity.City.Trim());
+            if (!string.IsNullOrWhiteSpace(stateField)) addressParts.Add(stateField.Trim());
+            if (!string.IsNullOrWhiteSpace(zipCode)) addressParts.Add(zipCode.Trim());
+
+            var fullAddress = string.Join(", ", addressParts);
+
+            if (string.IsNullOrWhiteSpace(fullAddress))
+            {
+                errorMessage = "Please enter an address.";
+                return;
+            }
+
+            var geocoded = await ActivityService.GeocodeAddressAsync(fullAddress);
+            if (geocoded == null)
+            {
+                errorMessage = "Could not find that address. Please check and try again.";
+                return;
+            }
+
+            newActivity.Latitude = geocoded.Latitude;
+            newActivity.Longitude = geocoded.Longitude;
+
+            // Set first image as the activity's image
+            if (imagePreviews.Count > 0)
+            {
+                newActivity.ImageUrl = imagePreviews[0];
+            }
+
+            var created = await ActivityService.CreateActivityAsync(newActivity);
+            successMessage = $"Activity '{created.Name}' in '{created.City}' saved successfully!";
+
+            // Reset form
+            newActivity = new Activity() { Activitytime = DateTime.UtcNow };
+            streetAddress = "";
+            aptSuite = "";
+            stateField = "";
+            zipCode = "";
+            imagePreviews.Clear();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to create activity");
+            errorMessage = "Failed to create activity. Please try again.";
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
     }
 }
