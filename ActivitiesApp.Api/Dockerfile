@@ -7,11 +7,15 @@ WORKDIR /src
 
 # Copy csproj files and restore
 COPY ActivitiesApp.Api/ActivitiesApp.Api.csproj ActivitiesApp.Api/
+COPY ActivitiesApp.Infrastructure/ActivitiesApp.Infrastructure.csproj ActivitiesApp.Infrastructure/
+COPY ActivitiesApp.Infrastructure.Migrations/ActivitiesApp.Infrastructure.Migrations.csproj ActivitiesApp.Infrastructure.Migrations/
 COPY ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj ActivitiesApp.ServiceDefaults/
 RUN dotnet restore ActivitiesApp.Api/ActivitiesApp.Api.csproj
 
 # Copy everything and build
 COPY ActivitiesApp.Api/ ActivitiesApp.Api/
+COPY ActivitiesApp.Infrastructure/ ActivitiesApp.Infrastructure/
+COPY ActivitiesApp.Infrastructure.Migrations/ ActivitiesApp.Infrastructure.Migrations/
 COPY ActivitiesApp.ServiceDefaults/ ActivitiesApp.ServiceDefaults/
 RUN dotnet publish ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release -o /app/publish --no-restore
 
