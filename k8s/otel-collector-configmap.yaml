@@ -28,10 +28,6 @@ data:
         endpoint: http://loki:3100/otlp
         headers:
           X-Scope-OrgID: docker
-      otlp/tempo:
-        endpoint: tempo:4317
-        tls:
-          insecure: true
       debug:
         verbosity: basic
 
@@ -50,7 +46,3 @@ data:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [prometheus, debug]
-        traces:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [otlp/tempo, debug]
