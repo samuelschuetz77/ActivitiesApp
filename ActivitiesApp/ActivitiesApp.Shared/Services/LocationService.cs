@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.JSInterop;
 
 namespace ActivitiesApp.Shared.Services;
 
 public class LocationService : IDisposable
 {
     private readonly ILogger<LocationService> _logger;
+    private readonly ILocationProvider _locationProvider;
     private Timer? _timer;
 
     public double Latitude { get; private set; }
@@ -26,38 +26,35 @@ public class LocationService : IDisposable
 
     public event Action? LocationChanged;
 
-    public LocationService(ILogger<LocationService> logger)
+    public LocationService(ILogger<LocationService> logger, ILocationProvider locationProvider)
     {
         _logger = logger;
+        _locationProvider = locationProvider;
     }
 
-    public void StartTracking(IJSRuntime js)
+    public void StartTracking()
     {
         if (_timer != null) return;
 
-        _logger.LogInformation("Starting browser location tracking");
+        _logger.LogInformation("Starting location tracking");
 
         // Initial fetch immediately, then every 3 minutes
-        _ = UpdateLocationAsync(js);
+        _ = UpdateLocationAsync();
         _timer = new Timer(
-            async _ => await UpdateLocationAsync(js),
+            async _ => await UpdateLocationAsync(),
             null,
             TimeSpan.FromMinutes(3),
             TimeSpan.FromMinutes(3));
     }
 
-    private async Task UpdateLocationAsync(IJSRuntime js)
+    private async Task UpdateLocationAsync()
     {
         try
         {
-            var coords = await js.InvokeAsync<double[]>("getUserLocation");
-            if (coords.Length < 2)
-            {
-                throw new InvalidOperationException("Browser location response was missing coordinates.");
-            }
+            var (lat, lng) = await _locationProvider.GetLocationAsync();
 
-            Latitude = coords[0];
-            Longitude = coords[1];
+            Latitude = lat;
+            Longitude = lng;
             HasLocation = true;
             LastError = null;
             _logger.LogInformation("Location updated: {Lat}, {Lng}", Latitude, Longitude);

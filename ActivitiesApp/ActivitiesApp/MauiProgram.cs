@@ -51,6 +51,9 @@ public static class MauiProgram
             options.UseSqlite($"Data Source={dbPath}");
         });
 
+        // Native location provider (triggers Android permission prompt)
+        builder.Services.AddSingleton<ActivitiesApp.Shared.Services.ILocationProvider, ActivitiesApp.Services.MauiLocationProvider>();
+
         // Background location tracking (singleton — polls every 3 min)
         builder.Services.AddSingleton<ActivitiesApp.Shared.Services.LocationService>();
 

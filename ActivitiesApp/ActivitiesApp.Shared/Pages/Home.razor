@@ -217,7 +217,7 @@
         {
             LocationService.LocationChanged += OnLocationChanged;
             ActivityService.DataChanged += OnDataChanged;
-            LocationService.StartTracking(JS);
+            LocationService.StartTracking();
 
             await LoadRecentlyViewed();
             await LoadNearbyActivities();

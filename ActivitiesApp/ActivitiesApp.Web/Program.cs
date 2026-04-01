@@ -36,7 +36,8 @@ builder.Services.AddHttpClient<ActivityRestClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<IActivityService>(sp => sp.GetRequiredService<ActivityRestClient>());
-builder.Services.AddSingleton<LocationService>();
+builder.Services.AddScoped<ILocationProvider, ActivitiesApp.Web.Services.JsLocationProvider>();
+builder.Services.AddScoped<LocationService>();
 
 var app = builder.Build();
 
