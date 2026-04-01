@@ -20,5 +20,6 @@ namespace ActivitiesApp.Shared.Models
         public double Rating { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
         public bool IsDeleted { get; set; }
+        public string? CreatedByUserId { get; set; }
     }
 }

@@ -13,7 +13,7 @@ public interface IActivityService
     Task<List<Activity>> ListActivitiesAsync();
 
     // Discover nearby — searches Google, syncs to DB, returns all
-    Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters);
+    Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null);
 
     // Google Maps
     Task<List<NearbyPlace>> SearchNearbyPlacesAsync(double lat, double lng, int radiusMeters, string? type = null, string? keyword = null);

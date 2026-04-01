@@ -144,6 +144,12 @@ h1:focus {
     margin: 0 0 0.85rem 0;
 }
 
+.home-section-subtitle {
+    margin: -0.25rem 0 1rem 0;
+    color: #6b7280;
+    font-size: 0.95rem;
+}
+
 .see-more-container {
     display: flex;
     justify-content: center;
@@ -165,6 +171,75 @@ h1:focus {
 .btn-see-more:hover {
     opacity: 0.9;
     transform: translateY(-2px);
+}
+
+.tag-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.85rem;
+}
+
+.tag-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    min-height: 112px;
+    padding: 1rem;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #ffffff 0%, #f3f7fb 100%);
+    border: 1px solid #e3ebf5;
+    box-shadow: 0 8px 20px rgba(25, 45, 80, 0.08);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.tag-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 28px rgba(25, 45, 80, 0.12);
+    border-color: #bfd4ea;
+}
+
+.tag-card.selected {
+    background: linear-gradient(160deg, #1b6ec2 0%, #2a9d4e 100%);
+    border-color: transparent;
+    color: #fff;
+}
+
+.tag-card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.tag-card-label {
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.filtered-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.clear-filter-btn {
+    border: 1px solid #d0d7e2;
+    background: #fff;
+    color: #445066;
+    padding: 0.5rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.clear-filter-btn:hover {
+    background: #f3f7fb;
+    border-color: #b8c4d6;
 }
 
 /* ========== Create Activity Page ========== */
@@ -446,6 +521,26 @@ h1:focus {
     padding: 3rem 1rem;
     color: #888;
     font-size: 1.1rem;
+}
+
+@media (max-width: 640.98px) {
+    .tag-cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tag-card {
+        min-height: 96px;
+        padding: 0.9rem;
+    }
+
+    .filtered-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .clear-filter-btn {
+        width: 100%;
+    }
 }
 
 /* ========== Activity Detail Page ========== */

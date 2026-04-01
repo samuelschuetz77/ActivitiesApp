@@ -92,16 +92,79 @@ public class OfflineActivityService : IActivityService
 
     // ─── Discover (return cache immediately, refresh in background) ───
 
-    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters)
+    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        var hasTagFilter = !string.IsNullOrWhiteSpace(tagName);
+
+        if (hasTagFilter && _connectivity.NetworkAccess == NetworkAccess.Internet)
+        {
+            _logger.LogInformation(
+                "DiscoverActivitiesAsync: running synchronous gRPC fetch for tag {Tag} at ({Lat},{Lng}) radius={RadiusMeters}m",
+                tagName, lat, lng, radiusMeters);
+
+            var request = new DiscoverActivitiesRequest
+            {
+                Latitude = lat,
+                Longitude = lng,
+                RadiusMeters = radiusMeters,
+                TagName = tagName ?? ""
+            };
+
+            var streamedActivities = new List<Activity>();
+
+            using var call = _grpcClient.DiscoverActivities(request);
+            await foreach (var response in call.ResponseStream.ReadAllAsync())
+            {
+                var activity = ToActivityFromResponse(response);
+                streamedActivities.Add(activity);
+                _cache.AddOrUpdate(activity);
+
+                var existing = await _db.Activities.FindAsync(activity.Id);
+                if (existing == null)
+                {
+                    var local = FromSharedActivity(activity);
+                    local.SyncState = SyncState.Synced;
+                    _db.Activities.Add(local);
+                }
+                else
+                {
+                    existing.Name = activity.Name ?? "";
+                    existing.Description = activity.Description ?? "";
+                    existing.Cost = activity.Cost;
+                    existing.Activitytime = activity.Activitytime;
+                    existing.Latitude = activity.Latitude;
+                    existing.Longitude = activity.Longitude;
+                    existing.MinAge = activity.MinAge;
+                    existing.MaxAge = activity.MaxAge;
+                    existing.Category = activity.Category;
+                    existing.ImageUrl = activity.ImageUrl;
+                    existing.PlaceId = activity.PlaceId;
+                    existing.Rating = activity.Rating;
+                    existing.UpdatedAt = activity.UpdatedAt;
+                    existing.IsDeleted = activity.IsDeleted;
+                    existing.SyncState = SyncState.Synced;
+                }
+            }
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "DiscoverActivitiesAsync: synchronous gRPC fetch returned {Count} items for tag {Tag} in {Ms}ms",
+                streamedActivities.Count, tagName, sw.ElapsedMilliseconds);
+
+            return streamedActivities;
+        }
 
         // Return cached data filtered by distance
         var radiusMiles = radiusMeters / 1609.34;
         var cached = _cache.GetAll()
             .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
+            .Where(a => string.IsNullOrWhiteSpace(tagName) || HasTag(a.Category, tagName))
             .ToList();
-        _logger.LogDebug("DiscoverActivitiesAsync: returning {Count} cached items within {Radius}mi in {Ms}ms", cached.Count, radiusMiles, sw.ElapsedMilliseconds);
+        _logger.LogDebug(
+            "DiscoverActivitiesAsync: returning {Count} cached items within {Radius}mi for tag {Tag} in {Ms}ms",
+            cached.Count, radiusMiles, tagName ?? "", sw.ElapsedMilliseconds);
 
         if (_connectivity.NetworkAccess == NetworkAccess.Internet)
         {
@@ -110,6 +173,13 @@ public class OfflineActivityService : IActivityService
             {
                 try
                 {
+                    var request = new DiscoverActivitiesRequest
+                    {
+                        Latitude = lat,
+                        Longitude = lng,
+                        RadiusMeters = radiusMeters,
+                        TagName = tagName ?? ""
+                    };
                     var activities = await _http.GetFromJsonAsync<List<Activity>>(
                         $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}");
 
@@ -132,10 +202,14 @@ public class OfflineActivityService : IActivityService
                         _logger.LogInformation("DiscoverActivities background refresh complete");
                         DataChanged?.Invoke();
                     }
+
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("DiscoverActivities background refresh complete for tag {Tag}", tagName ?? "");
+                    DataChanged?.Invoke();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Background discover refresh failed");
+                    _logger.LogWarning(ex, "Background discover refresh failed for tag {Tag}", tagName ?? "");
                 }
             });
         }
@@ -277,5 +351,14 @@ public class OfflineActivityService : IActivityService
         return R * c;
     }
 
+    private static bool HasTag(string? category, string tagName)
+    {
+        if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(tagName))
+            return false;
+
+        return category
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(tag => string.Equals(tag, tagName, StringComparison.OrdinalIgnoreCase));
+    }
     private record ReverseGeocodeResult(string FormattedAddress);
 }

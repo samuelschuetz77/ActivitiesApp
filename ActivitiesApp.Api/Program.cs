@@ -1,12 +1,20 @@
 using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Models;
 using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Diagnostics.Metrics;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using ActivitiesApp.Api.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 var appMeter = new Meter(builder.Environment.ApplicationName);
@@ -22,6 +30,7 @@ builder.Services.AddGrpc();
 
 // Determine database provider from environment
 var dbProvider = builder.Configuration["DATABASE_PROVIDER"] ?? "Cosmos";
+var defaultPostgresHost = builder.Environment.IsDevelopment() ? "localhost" : "postgres";
 
 if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
 {
@@ -30,11 +39,10 @@ if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     // Build connection string from individual env vars if not provided as a single string
     if (string.IsNullOrEmpty(connectionString))
     {
-        var host = builder.Configuration["POSTGRES_HOST"] ?? "postgres";
+        var host = builder.Configuration["POSTGRES_HOST"] ?? defaultPostgresHost;
         var db = builder.Configuration["POSTGRES_DB"] ?? "activitiesdb";
         var user = builder.Configuration["POSTGRES_USER"] ?? "activitiesapp";
-        var password = builder.Configuration["POSTGRES_PASSWORD"]
-            ?? throw new InvalidOperationException("POSTGRES_PASSWORD is required when DATABASE_PROVIDER=Postgres");
+        var password = builder.Configuration["POSTGRES_PASSWORD"] ?? "activitiesapp";
         connectionString = $"Host={host};Port=5432;Database={db};Username={user};Password={password}";
     }
 
@@ -66,6 +74,57 @@ else
 
     builder.Services.AddScoped<IActivityDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 }
+
+// ─── Identity DbContext (always Postgres) ───
+var identityConnectionString = builder.Configuration.GetConnectionString("ActivitiesDb");
+if (string.IsNullOrEmpty(identityConnectionString))
+{
+    var host = builder.Configuration["POSTGRES_HOST"] ?? defaultPostgresHost;
+    var db = builder.Configuration["POSTGRES_DB"] ?? "activitiesdb";
+    var user = builder.Configuration["POSTGRES_USER"] ?? "activitiesapp";
+    var password = builder.Configuration["POSTGRES_PASSWORD"] ?? "activitiesapp";
+    identityConnectionString = $"Host={host};Port=5432;Database={db};Username={user};Password={password}";
+}
+
+builder.Services.AddDbContext<AppIdentityDbContext>(options =>
+    options.UseNpgsql(identityConnectionString, npgsql =>
+        npgsql.MigrationsAssembly("ActivitiesApp.Infrastructure.Migrations")));
+
+// ─── ASP.NET Core Identity ───
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.User.RequireUniqueEmail = true;
+})
+.AddEntityFrameworkStores<AppIdentityDbContext>()
+.AddDefaultTokenProviders();
+
+// ─── JWT Authentication ───
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretDevKey12345678901234567890";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ActivitiesApp";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
+});
+
+builder.Services.AddAuthorization();
 
 // Register Google Places service with HttpClient
 builder.Services.AddHttpClient<GooglePlacesService>();
@@ -115,12 +174,52 @@ using (var scope = app.Services.CreateScope())
         await context.Database.EnsureCreatedAsync();
         startupLog.LogInformation("Cosmos DB ensured");
     }
+
+    try
+    {
+        // Always migrate and seed Identity when Postgres is available.
+        var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+        await identityContext.Database.MigrateAsync();
+        startupLog.LogInformation("Identity migrations applied");
+
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        string[] roles = ["Admin", "User"];
+        foreach (var role in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+                await roleManager.CreateAsync(new IdentityRole(role));
+        }
+
+        var adminEmail = "admin@activitiesapp.com";
+        if (await userManager.FindByEmailAsync(adminEmail) == null)
+        {
+            var admin = new ApplicationUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                DisplayName = "Admin",
+                EmailConfirmed = true
+            };
+            var result = await userManager.CreateAsync(admin, "Admin123!");
+            if (result.Succeeded)
+                await userManager.AddToRoleAsync(admin, "Admin");
+        }
+    }
+    catch (NpgsqlException ex) when (app.Environment.IsDevelopment() && !dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        startupLog.LogWarning(ex, "Identity Postgres is unavailable in Development. Continuing without applying Identity migrations.");
+    }
 }
 
 app.MapDefaultEndpoints();
 
 // gRPC-Web so HTTP/1.1 callers (Blazor web) can reach gRPC services
 app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 app.MapGet("/", () => $"ActivitiesApp gRPC API is running (v{appVersion}, db={dbProvider}). Use a gRPC client to communicate.");
@@ -150,6 +249,9 @@ app.MapGet("/api/health/db", async (IServiceProvider sp) =>
     }
 });
 
+// ─── Auth endpoints ───
+app.MapAuthEndpoints();
+
 // ─── REST endpoints for Blazor Web client ───
 
 app.MapGet("/api/activities", async (IActivityDbContext db) =>
@@ -167,31 +269,35 @@ app.MapGet("/api/activities/{id:guid}", async (Guid id, IActivityDbContext db) =
     return Results.Ok(activity);
 });
 
-app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db) =>
+app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db, HttpContext httpContext) =>
 {
     activity.Id = Guid.NewGuid();
+    var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    activity.CreatedByUserId = userId;
     db.Activities.Add(activity);
     await db.SaveChangesAsync();
     activitiesCreatedCounter.Add(1,
         new KeyValuePair<string, object?>("creation_source", "manual"));
     return Results.Created($"/api/activities/{activity.Id}", activity);
-});
+}).RequireAuthorization();
 
-app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
+app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName,
     IActivityDbContext db, GooglePlacesService places, ILogger<Program> log) =>
 {
     var radius = radiusMeters ?? 16093;
-    log.LogInformation("REST DiscoverActivities at ({Lat},{Lng}) radius={Radius}m", lat, lng, radius);
+    log.LogInformation("REST DiscoverActivities at ({Lat},{Lng}) radius={Radius}m tag={Tag}", lat, lng, radius, tagName ?? "");
 
     List<GooglePlacesService.NearbyPlace> googlePlaces;
     try
     {
-        googlePlaces = await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: "fun things to do");
+        googlePlaces = string.IsNullOrWhiteSpace(tagName)
+            ? await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: "fun things to do")
+            : await SearchPlacesForTagAsync(lat, lng, radius, tagName, places, log);
         log.LogInformation("REST Discover got {Count} Google places", googlePlaces.Count);
     }
     catch (Exception ex)
     {
-        log.LogError(ex, "REST Discover Google search failed, falling back to DB only");
+        log.LogError(ex, "REST Discover Google search failed for tag {Tag}, falling back to DB only", tagName ?? "");
         googlePlaces = [];
     }
 
@@ -203,13 +309,25 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
 
     var results = new List<ActivitiesApp.Infrastructure.Models.Activity>();
     var newActivities = new List<ActivitiesApp.Infrastructure.Models.Activity>();
+    var updatedExistingCount = 0;
 
     foreach (var place in googlePlaces)
     {
         if (string.IsNullOrEmpty(place.PlaceId)) continue;
 
+        var tags = GooglePlaceTagMapper.GetTags(place.Types);
+        if (tags.Count == 0) continue;
+
+        var category = string.Join(",", tags);
+
         if (existingByPlaceId.TryGetValue(place.PlaceId, out var existing))
         {
+            existing.Category = category;
+            existing.Rating = place.Rating;
+            existing.Latitude = place.Latitude;
+            existing.Longitude = place.Longitude;
+            existing.ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
+            updatedExistingCount++;
             FixImageUrl(existing);
             results.Add(existing);
         }
@@ -227,9 +345,7 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
                 Longitude = place.Longitude,
                 MinAge = 0,
                 MaxAge = 99,
-                Category = place.Types.Any(t => t is "park" or "campground") ? "Outdoors"
-                    : place.Types.Any(t => t is "restaurant" or "cafe" or "food") ? "Food"
-                    : "Social",
+                Category = category,
                 ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
                 PlaceId = place.PlaceId,
                 Rating = place.Rating
@@ -243,10 +359,16 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters,
     if (newActivities.Count > 0)
     {
         db.Activities.AddRange(newActivities);
+    }
+
+    if (newActivities.Count > 0 || updatedExistingCount > 0)
+    {
         await db.SaveChangesAsync();
     }
 
-    log.LogInformation("REST Discover returning {Count} activities", results.Count);
+    log.LogInformation(
+        "REST Discover returning {Count} activities with {NewCount} new and {UpdatedCount} updated existing rows",
+        results.Count, newActivities.Count, updatedExistingCount);
     return Results.Ok(results);
 });
 
@@ -344,6 +466,66 @@ void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
     if (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")) return;
     // Raw Google photo reference — convert to proxy URL (legacy fallback)
     activity.ImageUrl = $"/api/photos?r={Uri.EscapeDataString(activity.ImageUrl)}&maxwidth=400";
+}
+
+static async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync(
+    double latitude,
+    double longitude,
+    int radiusMeters,
+    string tagName,
+    GooglePlacesService places,
+    ILogger log)
+{
+    if (!GooglePlaceTagMapper.TryGetDefinition(tagName, out var tagDefinition) || tagDefinition is null)
+    {
+        log.LogWarning("REST Discover requested unknown tag {Tag}; falling back to generic search", tagName);
+        return await places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: null, keyword: "fun things to do");
+    }
+
+    var deduped = new Dictionary<string, GooglePlacesService.NearbyPlace>(StringComparer.Ordinal);
+
+    foreach (var googleType in tagDefinition.SearchTypes)
+    {
+        try
+        {
+            var placesForType = await places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: googleType, keyword: null);
+            log.LogInformation(
+                "REST Discover tag {Tag} for Google type {GoogleType} returned {Count} places",
+                tagName, googleType, placesForType.Count);
+
+            if (placesForType.Count > 0)
+            {
+                log.LogInformation(
+                    "REST Discover tag {Tag} type {GoogleType} sample places: {PlaceNames}",
+                    tagName,
+                    googleType,
+                    string.Join(" | ", placesForType.Take(5).Select(p => p.Name)));
+            }
+
+            foreach (var place in placesForType)
+            {
+                if (!string.IsNullOrWhiteSpace(place.PlaceId))
+                {
+                    deduped[place.PlaceId] = place;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "REST Discover tag {Tag} failed for Google type {GoogleType}", tagName, googleType);
+        }
+    }
+
+    log.LogInformation("REST Discover tag {Tag} deduped to {Count} places", tagName, deduped.Count);
+    if (deduped.Count > 0)
+    {
+        log.LogInformation(
+            "REST Discover tag {Tag} deduped sample: {PlaceNames}",
+            tagName,
+            string.Join(" | ", deduped.Values.Take(8).Select(p => $"{p.Name} [{string.Join("/", p.Types.Take(3))}]")));
+    }
+
+    return deduped.Values.ToList();
 }
 
 app.Run();
