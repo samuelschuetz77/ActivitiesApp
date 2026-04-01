@@ -245,6 +245,34 @@
         }
     }
 
+    private async void OnLocationChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (selectedTag != null)
+            {
+                await LoadFilteredActivities(selectedTag, "location_changed");
+            }
+        });
+    }
+
+    private async void OnDataChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadRecentlyViewed();
+
+            if (selectedTag != null)
+            {
+                await LoadFilteredActivities(selectedTag, "data_changed");
+            }
+            else
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
     private async Task LoadRecentlyViewed()
     {
         try
@@ -496,6 +524,8 @@
 
     public void Dispose()
     {
+        LocationService.LocationChanged -= OnLocationChanged;
+        ActivityService.DataChanged -= OnDataChanged;
     }
 
     private record TagCardInfo(string Name, string Emoji);

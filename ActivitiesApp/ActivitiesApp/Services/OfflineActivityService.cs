@@ -95,66 +95,6 @@ public class OfflineActivityService : IActivityService
     public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var hasTagFilter = !string.IsNullOrWhiteSpace(tagName);
-
-        if (hasTagFilter && _connectivity.NetworkAccess == NetworkAccess.Internet)
-        {
-            _logger.LogInformation(
-                "DiscoverActivitiesAsync: running synchronous gRPC fetch for tag {Tag} at ({Lat},{Lng}) radius={RadiusMeters}m",
-                tagName, lat, lng, radiusMeters);
-
-            var request = new DiscoverActivitiesRequest
-            {
-                Latitude = lat,
-                Longitude = lng,
-                RadiusMeters = radiusMeters,
-                TagName = tagName ?? ""
-            };
-
-            var streamedActivities = new List<Activity>();
-
-            using var call = _grpcClient.DiscoverActivities(request);
-            await foreach (var response in call.ResponseStream.ReadAllAsync())
-            {
-                var activity = ToActivityFromResponse(response);
-                streamedActivities.Add(activity);
-                _cache.AddOrUpdate(activity);
-
-                var existing = await _db.Activities.FindAsync(activity.Id);
-                if (existing == null)
-                {
-                    var local = FromSharedActivity(activity);
-                    local.SyncState = SyncState.Synced;
-                    _db.Activities.Add(local);
-                }
-                else
-                {
-                    existing.Name = activity.Name ?? "";
-                    existing.Description = activity.Description ?? "";
-                    existing.Cost = activity.Cost;
-                    existing.Activitytime = activity.Activitytime;
-                    existing.Latitude = activity.Latitude;
-                    existing.Longitude = activity.Longitude;
-                    existing.MinAge = activity.MinAge;
-                    existing.MaxAge = activity.MaxAge;
-                    existing.Category = activity.Category;
-                    existing.ImageUrl = activity.ImageUrl;
-                    existing.PlaceId = activity.PlaceId;
-                    existing.Rating = activity.Rating;
-                    existing.UpdatedAt = activity.UpdatedAt;
-                    existing.IsDeleted = activity.IsDeleted;
-                    existing.SyncState = SyncState.Synced;
-                }
-            }
-
-            await _db.SaveChangesAsync();
-
-            _logger.LogInformation(
-                "DiscoverActivitiesAsync: synchronous gRPC fetch returned {Count} items for tag {Tag} in {Ms}ms",
-                streamedActivities.Count, tagName, sw.ElapsedMilliseconds);
-
-            return streamedActivities;
-        }
 
         // Return cached data filtered by distance
         var radiusMiles = radiusMeters / 1609.34;
@@ -173,15 +113,11 @@ public class OfflineActivityService : IActivityService
             {
                 try
                 {
-                    var request = new DiscoverActivitiesRequest
-                    {
-                        Latitude = lat,
-                        Longitude = lng,
-                        RadiusMeters = radiusMeters,
-                        TagName = tagName ?? ""
-                    };
+                    var tagQuery = string.IsNullOrWhiteSpace(tagName)
+                        ? ""
+                        : $"&tagName={Uri.EscapeDataString(tagName)}";
                     var activities = await _http.GetFromJsonAsync<List<Activity>>(
-                        $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}");
+                        $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}{tagQuery}");
 
                     if (activities != null)
                     {
@@ -194,16 +130,32 @@ public class OfflineActivityService : IActivityService
                                 local.SyncState = SyncState.Synced;
                                 _db.Activities.Add(local);
                             }
+                            else
+                            {
+                                existing.Name = activity.Name ?? "";
+                                existing.City = activity.City ?? "";
+                                existing.Description = activity.Description ?? "";
+                                existing.Cost = activity.Cost;
+                                existing.Activitytime = activity.Activitytime;
+                                existing.Latitude = activity.Latitude;
+                                existing.Longitude = activity.Longitude;
+                                existing.MinAge = activity.MinAge;
+                                existing.MaxAge = activity.MaxAge;
+                                existing.Category = activity.Category;
+                                existing.ImageUrl = activity.ImageUrl;
+                                existing.PlaceId = activity.PlaceId;
+                                existing.Rating = activity.Rating;
+                                existing.UpdatedAt = activity.UpdatedAt;
+                                existing.IsDeleted = activity.IsDeleted;
+                                existing.SyncState = SyncState.Synced;
+                            }
 
                             _cache.AddOrUpdate(activity);
                         }
 
                         await _db.SaveChangesAsync();
-                        _logger.LogInformation("DiscoverActivities background refresh complete");
-                        DataChanged?.Invoke();
                     }
 
-                    await _db.SaveChangesAsync();
                     _logger.LogInformation("DiscoverActivities background refresh complete for tag {Tag}", tagName ?? "");
                     DataChanged?.Invoke();
                 }
