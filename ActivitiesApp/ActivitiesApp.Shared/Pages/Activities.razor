@@ -1,6 +1,7 @@
 @page "/activities"
 @using ActivitiesApp.Shared.Models
 @using ActivitiesApp.Shared.Services
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
@@ -89,15 +90,17 @@
         </div>
 
         <div class="filter-item">
-            <label>Category</label>
+            <label>Tag</label>
             <select class="filter-select" @bind="selectedCategory" @bind:after="ApplyFilters">
                 <option value="">All</option>
+                <option value="Food & Drink">Food & Drink</option>
+                <option value="Attractions">Attractions</option>
                 <option value="Outdoors">Outdoors</option>
-                <option value="Sports">Sports</option>
-                <option value="Arts">Arts</option>
-                <option value="Food">Food</option>
-                <option value="Music">Music</option>
-                <option value="Social">Social</option>
+                <option value="Arts & Culture">Arts & Culture</option>
+                <option value="Nightlife">Nightlife</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Fitness & Sports">Fitness & Sports</option>
+                <option value="Wellness & Beauty">Wellness & Beauty</option>
                 <option value="Education">Education</option>
             </select>
         </div>
@@ -154,9 +157,12 @@
                                 <span>@GetCategoryIcon(activity.Category)</span>
                             </div>
                         }
-                        @if (!string.IsNullOrEmpty(activity.Category))
+                        @{
+                            var tags = GetTagList(activity.Category);
+                        }
+                        @if (tags.Count > 0)
                         {
-                            <span class="card-category-badge">@activity.Category</span>
+                            <span class="card-category-badge">@tags[0]</span>
                         }
                     </div>
                     <div class="card-body">
@@ -335,8 +341,7 @@
 
         if (!string.IsNullOrEmpty(selectedCategory))
         {
-            query = query.Where(a =>
-                string.Equals(a.Category, selectedCategory, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(a => HasTag(a.Category, selectedCategory));
         }
 
         if (hasActiveLocation)
@@ -387,17 +392,32 @@
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
-    private static string GetCategoryIcon(string? category) => category switch
+    private static List<string> GetTagList(string? category)
     {
-        "Outdoors" => "\ud83c\udf32",
-        "Sports" => "\u26bd",
-        "Arts" => "\ud83c\udfa8",
-        "Food" => "\ud83c\udf54",
-        "Music" => "\ud83c\udfb5",
-        "Education" => "\ud83d\udcda",
-        "Social" => "\ud83c\udf89",
-        _ => "\ud83d\udccd"
-    };
+        if (string.IsNullOrWhiteSpace(category)) return [];
+        return category.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private static bool HasTag(string? category, string tagName) =>
+        GetTagList(category).Any(tag => string.Equals(tag, tagName, StringComparison.OrdinalIgnoreCase));
+
+    private static string GetCategoryIcon(string? category)
+    {
+        var firstTag = GetTagList(category).FirstOrDefault();
+        return firstTag switch
+        {
+            "Food & Drink" => "\ud83c\udf7d\ufe0f",
+            "Attractions" => "\u2b50",
+            "Outdoors" => "\ud83c\udf32",
+            "Arts & Culture" => "\ud83c\udfa8",
+            "Nightlife" => "\ud83c\udf19",
+            "Shopping" => "\ud83d\udecd\ufe0f",
+            "Fitness & Sports" => "\ud83c\udfcb\ufe0f",
+            "Wellness & Beauty" => "\u2728",
+            "Education" => "\ud83c\udf93",
+            _ => "\ud83d\udccd"
+        };
+    }
 
     private async Task ToggleLocationPopup()
     {

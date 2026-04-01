@@ -94,29 +94,31 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         IServerStreamWriter<ActivityResponse> responseStream,
         ServerCallContext context)
     {
-        _logger.LogInformation("DiscoverActivities at ({Lat},{Lng}) radius={Radius}m",
-            request.Latitude, request.Longitude, request.RadiusMeters);
+        _logger.LogInformation("DiscoverActivities at ({Lat},{Lng}) radius={Radius}m tag={Tag}",
+            request.Latitude, request.Longitude, request.RadiusMeters, request.TagName ?? "");
 
         List<GooglePlacesService.NearbyPlace> places;
         try
         {
-            // Search Google for fun things nearby
-            places = await _places.SearchNearbyAsync(
-                request.Latitude, request.Longitude, request.RadiusMeters,
-                type: null, keyword: "fun things to do");
+            places = string.IsNullOrWhiteSpace(request.TagName)
+                ? await _places.SearchNearbyAsync(
+                    request.Latitude, request.Longitude, request.RadiusMeters,
+                    type: null, keyword: "fun things to do")
+                : await SearchPlacesForTagAsync(
+                    request.Latitude, request.Longitude, request.RadiusMeters, request.TagName);
+
             _logger.LogInformation("DiscoverActivities received {Count} Google places", places.Count);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "DiscoverActivities Google search failed at ({Lat},{Lng}) radius={Radius}m. Falling back to DB only.",
-                request.Latitude, request.Longitude, request.RadiusMeters);
+                "DiscoverActivities Google search failed at ({Lat},{Lng}) radius={Radius}m tag={Tag}. Falling back to DB only.",
+                request.Latitude, request.Longitude, request.RadiusMeters, request.TagName ?? "");
             places = [];
         }
 
         // Load all existing activities that came from Google into a lookup
         var existingActivities = await _db.Activities
-            .AsNoTracking()
             .Where(a => a.PlaceId != null)
             .ToListAsync();
         _logger.LogInformation("DiscoverActivities loaded {Count} existing Google-backed DB rows", existingActivities.Count);
@@ -127,8 +129,10 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             .ToDictionary(g => g.Key, g => g.First());
 
         var newActivities = new List<Activity>();
+        var updatedActivities = new List<Activity>();
         var streamedExistingCount = 0;
         var streamedNewCount = 0;
+        var skippedUnmappedCount = 0;
 
         foreach (var place in places)
         {
@@ -138,15 +142,40 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             if (string.IsNullOrEmpty(place.PlaceId))
                 continue;
 
+            var tags = GooglePlaceTagMapper.GetTags(place.Types);
+            if (tags.Count == 0)
+            {
+                skippedUnmappedCount++;
+                _logger.LogDebug("Skipping unmapped Google place {PlaceId} {Name} with types [{Types}]",
+                    place.PlaceId, place.Name, string.Join(",", place.Types));
+                continue;
+            }
+
+            // TODO: Temporary comma-separated tag storage in Category field.
+            // Migrate to a proper Tags column or join table later.
+            var category = string.Join(",", tags);
+
             if (existingByPlaceId.TryGetValue(place.PlaceId, out var existing))
             {
+                if (!string.Equals(existing.Category, category, StringComparison.Ordinal))
+                {
+                    existing.Category = category;
+                    existing.Rating = place.Rating;
+                    existing.Latitude = place.Latitude;
+                    existing.Longitude = place.Longitude;
+                    existing.ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
+                    updatedActivities.Add(existing);
+
+                    _logger.LogInformation(
+                        "Updated existing activity {ActivityId} for place {PlaceId} with tags {Tags}",
+                        existing.Id, place.PlaceId, category);
+                }
+
                 await responseStream.WriteAsync(ToActivityResponse(existing));
                 streamedExistingCount++;
             }
             else
             {
-                var category = MapGoogleTypeToCategory(place.Types);
-
                 var activity = new Activity
                 {
                     Id = Guid.NewGuid(),
@@ -159,7 +188,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
                     Longitude = place.Longitude,
                     MinAge = 0,
                     MaxAge = 99,
-                    Category = category,
+                    Category = category, // TODO: comma-separated tags, migrate to proper Tags field
                     ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
                     PlaceId = place.PlaceId,
                     Rating = place.Rating
@@ -172,12 +201,17 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
             }
         }
 
-        // Batch save all new activities
         if (newActivities.Count > 0)
         {
             _db.Activities.AddRange(newActivities);
+        }
+
+        if (newActivities.Count > 0 || updatedActivities.Count > 0)
+        {
             await _db.SaveChangesAsync();
-            _logger.LogInformation("DiscoverActivities saved {Count} new DB rows", newActivities.Count);
+            _logger.LogInformation(
+                "DiscoverActivities saved {NewCount} new DB rows and updated {UpdatedCount} existing rows",
+                newActivities.Count, updatedActivities.Count);
         }
 
         if (places.Count == 0)
@@ -196,27 +230,67 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         }
 
         _logger.LogInformation(
-            "DiscoverActivities finished. Streamed {ExistingCount} existing, {NewCount} new, GooglePlaceCount={GooglePlaceCount}",
-            streamedExistingCount, streamedNewCount, places.Count);
+            "DiscoverActivities finished. Streamed {ExistingCount} existing, {NewCount} new, skipped {SkippedCount} unmapped, GooglePlaceCount={GooglePlaceCount}",
+            streamedExistingCount, streamedNewCount, skippedUnmappedCount, places.Count);
     }
 
-    private static string MapGoogleTypeToCategory(List<string> types)
+    private async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync(
+        double latitude, double longitude, int radiusMeters, string tagName)
     {
-        if (types.Any(t => t is "park" or "campground" or "natural_feature"))
-            return "Outdoors";
-        if (types.Any(t => t is "gym" or "stadium" or "bowling_alley"))
-            return "Sports";
-        if (types.Any(t => t is "art_gallery" or "museum" or "movie_theater"))
-            return "Arts";
-        if (types.Any(t => t is "restaurant" or "cafe" or "bakery" or "bar" or "food"))
-            return "Food";
-        if (types.Any(t => t is "night_club" or "concert_hall"))
-            return "Music";
-        if (types.Any(t => t is "library" or "book_store" or "university" or "school"))
-            return "Education";
-        if (types.Any(t => t is "amusement_park" or "zoo" or "aquarium" or "tourist_attraction"))
-            return "Social";
-        return "Social";
+        if (!GooglePlaceTagMapper.TryGetDefinition(tagName, out var tagDefinition) || tagDefinition is null)
+        {
+            _logger.LogWarning("DiscoverActivities requested unknown tag {Tag}; falling back to generic search", tagName);
+            return await _places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: null, keyword: "fun things to do");
+        }
+
+        var deduped = new Dictionary<string, GooglePlacesService.NearbyPlace>(StringComparer.Ordinal);
+
+        _logger.LogInformation(
+            "Starting tag-specific Google search for {Tag} using types [{Types}]",
+            tagName, string.Join(",", tagDefinition.SearchTypes));
+
+        foreach (var googleType in tagDefinition.SearchTypes)
+        {
+            try
+            {
+                var places = await _places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: googleType, keyword: null);
+                _logger.LogInformation(
+                    "Tag search {Tag} for Google type {GoogleType} returned {Count} places",
+                    tagName, googleType, places.Count);
+
+                if (places.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "Tag search {Tag} type {GoogleType} sample places: {PlaceNames}",
+                        tagName,
+                        googleType,
+                        string.Join(" | ", places.Take(5).Select(p => p.Name)));
+                }
+
+                foreach (var place in places)
+                {
+                    if (!string.IsNullOrWhiteSpace(place.PlaceId))
+                    {
+                        deduped[place.PlaceId] = place;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Tag search {Tag} failed for Google type {GoogleType}", tagName, googleType);
+            }
+        }
+
+        _logger.LogInformation("Tag-specific Google search for {Tag} deduped to {Count} places", tagName, deduped.Count);
+        if (deduped.Count > 0)
+        {
+            _logger.LogInformation(
+                "Tag-specific Google search for {Tag} deduped sample: {PlaceNames}",
+                tagName,
+                string.Join(" | ", deduped.Values.Take(8).Select(p => $"{p.Name} [{string.Join("/", p.Types.Take(3))}]")));
+        }
+
+        return deduped.Values.ToList();
     }
 
     // ─── Google Maps ───

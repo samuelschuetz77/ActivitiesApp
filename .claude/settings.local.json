@@ -27,7 +27,12 @@
       "Bash(dotnet ef migrations list:*)",
       "Bash(git stash:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.google.com)",
+      "Bash(dotnet add:*)"
     ]
   }
 }

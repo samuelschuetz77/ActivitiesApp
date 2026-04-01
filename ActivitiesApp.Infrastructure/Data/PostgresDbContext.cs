@@ -35,10 +35,12 @@ public class PostgresDbContext : DbContext, IActivityDbContext
             entity.Property(a => a.Rating).HasColumnName("rating");
             entity.Property(a => a.UpdatedAt).HasColumnName("updated_at");
             entity.Property(a => a.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(a => a.CreatedByUserId).HasColumnName("created_by_user_id").HasMaxLength(450);
 
             entity.HasIndex(a => a.PlaceId);
             entity.HasIndex(a => a.City);
             entity.HasIndex(a => a.UpdatedAt);
+            entity.HasIndex(a => a.CreatedByUserId);
         });
     }
 

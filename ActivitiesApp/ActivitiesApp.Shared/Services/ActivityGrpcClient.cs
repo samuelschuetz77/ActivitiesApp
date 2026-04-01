@@ -67,13 +67,14 @@ public class ActivityGrpcClient : IActivityService
 
     // ─── Discover ───
 
-    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters)
+    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null)
     {
         var request = new DiscoverActivitiesRequest
         {
             Latitude = lat,
             Longitude = lng,
-            RadiusMeters = radiusMeters
+            RadiusMeters = radiusMeters,
+            TagName = tagName ?? ""
         };
 
         var activities = new List<Activity>();

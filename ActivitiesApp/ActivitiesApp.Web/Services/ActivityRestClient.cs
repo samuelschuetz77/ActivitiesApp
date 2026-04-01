@@ -42,11 +42,12 @@ public class ActivityRestClient : IActivityService
         return result;
     }
 
-    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters)
+    public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null)
     {
-        _logger.LogInformation("REST DiscoverActivities at ({Lat},{Lng}) radius={Radius}", lat, lng, radiusMeters);
+        _logger.LogInformation("REST DiscoverActivities at ({Lat},{Lng}) radius={Radius} tag={Tag}", lat, lng, radiusMeters, tagName ?? "");
+        var tagQuery = string.IsNullOrWhiteSpace(tagName) ? "" : $"&tagName={Uri.EscapeDataString(tagName)}";
         var result = await _http.GetFromJsonAsync<List<Activity>>(
-            $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}") ?? [];
+            $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}{tagQuery}") ?? [];
         _logger.LogInformation("REST DiscoverActivities returned {Count} items", result.Count);
         return result;
     }

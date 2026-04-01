@@ -1,6 +1,7 @@
 @page "/"
 @using ActivitiesApp.Shared.Services
 @using ActivitiesApp.Shared.Models
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
@@ -15,7 +16,7 @@
 <div class="home-page">
     <!-- Location Row -->
     <div class="home-location-row">
-        <h1 class="home-title">Home</h1>
+        <h1 class="home-title">Discover</h1>
         <div class="location-icon-wrapper">
             <button class="location-btn @(hasActiveLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -80,18 +81,14 @@
                                 <img src="@activity.ImageUrl" alt="@activity.Name"
                                      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                 <div class="image-placeholder" style="display:none;">
-                                    <span>@GetCategoryIcon(activity.Category)</span>
+                                    <span>@GetFirstTagIcon(activity.Category)</span>
                                 </div>
                             }
                             else
                             {
                                 <div class="image-placeholder">
-                                    <span>@GetCategoryIcon(activity.Category)</span>
+                                    <span>@GetFirstTagIcon(activity.Category)</span>
                                 </div>
-                            }
-                            @if (!string.IsNullOrEmpty(activity.Category))
-                            {
-                                <span class="card-category-badge">@activity.Category</span>
                             }
                         </div>
                         <div class="card-body">
@@ -115,84 +112,108 @@
         </div>
     }
 
-    <!-- Activities Near You Section -->
+    <!-- Tag Cards Section -->
     <div class="home-section">
-        <h2 class="home-section-title">Activities Near You</h2>
-
-        @if (!string.IsNullOrEmpty(statusMessage))
-        {
-            <div class="loading">@statusMessage</div>
-            @if (!string.IsNullOrEmpty(statusDetail))
+        <h2 class="home-section-title">What are you looking for?</h2>
+        <p class="home-section-subtitle">Tap a tag to load places near your current or selected location.</p>
+        <div class="tag-cards-grid">
+            @foreach (var tag in tagCards)
             {
-                <div class="status-detail">@statusDetail</div>
+                <div class="tag-card @(selectedTag == tag.Name ? "selected" : "")"
+                     @onclick="() => OnTagSelected(tag.Name)">
+                    <span class="tag-card-icon">@tag.Emoji</span>
+                    <span class="tag-card-label">@tag.Name</span>
+                </div>
             }
-        }
-        else if (isLoadingNearby || nearbyActivities == null)
-        {
-            <div class="loading">Preparing activity feed...</div>
-        }
-        else if (!nearbyActivities.Any())
-        {
-            <div class="no-results">No nearby activities found.</div>
-        }
-        else
-        {
-            <div class="cards-grid">
-                @foreach (var activity in nearbyActivities.Take(70))
-                {
-                    <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
-                        <div class="card-image">
-                            @if (!string.IsNullOrEmpty(activity.ImageUrl))
-                            {
-                                <img src="@activity.ImageUrl" alt="@activity.Name"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-                                <div class="image-placeholder" style="display:none;">
-                                    <span>@GetCategoryIcon(activity.Category)</span>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="image-placeholder">
-                                    <span>@GetCategoryIcon(activity.Category)</span>
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(activity.Category))
-                            {
-                                <span class="card-category-badge">@activity.Category</span>
-                            }
-                        </div>
-                        <div class="card-body">
-                            <h3 class="card-title">@activity.Name</h3>
-                            <div class="card-rating">
-                                @for (int i = 1; i <= 5; i++)
-                                {
-                                    var starIndex = i;
-                                    <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
-                                }
-                                <span class="rating-text">@activity.Rating.ToString("0.0")</span>
-                            </div>
-                            <div class="card-details">
-                                <span class="card-cost">@FormatCost(activity.Cost)</span>
-                                <span class="card-distance">@GetDistance(activity) mi</span>
-                            </div>
-                        </div>
-                    </div>
-                }
+        </div>
+    </div>
+
+    <!-- Filtered Results Section -->
+    @if (selectedTag != null)
+    {
+        <div class="home-section">
+            <div class="filtered-header">
+                <h2 class="home-section-title">@selectedTag</h2>
+                <button class="clear-filter-btn" @onclick="ClearFilter">Clear</button>
             </div>
 
-            <div class="see-more-container">
-                <button class="btn-see-more" @onclick="GoToActivities">See More</button>
-            </div>
-        }
-    </div>
+            @if (isLoadingFiltered)
+            {
+                <div class="loading">Searching nearby...</div>
+            }
+            else if (filteredActivities != null && !filteredActivities.Any())
+            {
+                <div class="no-results">No @selectedTag activities found nearby.</div>
+            }
+            else if (filteredActivities != null)
+            {
+                <div class="cards-grid">
+                    @foreach (var activity in filteredActivities)
+                    {
+                        <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
+                            <div class="card-image">
+                                @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                                {
+                                    <img src="@activity.ImageUrl" alt="@activity.Name"
+                                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                    <div class="image-placeholder" style="display:none;">
+                                        <span>@GetTagIcon(selectedTag)</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="image-placeholder">
+                                        <span>@GetTagIcon(selectedTag)</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(selectedTag))
+                                {
+                                    <span class="card-category-badge">@selectedTag</span>
+                                }
+                            </div>
+                            <div class="card-body">
+                                <h3 class="card-title">@activity.Name</h3>
+                                <div class="card-rating">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        var starIndex = i;
+                                        <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                                    }
+                                    <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                                </div>
+                                <div class="card-details">
+                                    <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                    <span class="card-distance">@GetDistance(activity) mi</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
+    // Tag card definitions matching GooglePlaceTagMapper on the backend
+    private static readonly List<TagCardInfo> tagCards =
+    [
+        new("Food & Drink", "\ud83c\udf7d\ufe0f"),
+        new("Attractions", "\u2b50"),
+        new("Outdoors", "\ud83c\udf32"),
+        new("Arts & Culture", "\ud83c\udfa8"),
+        new("Nightlife", "\ud83c\udf19"),
+        new("Shopping", "\ud83d\udecd\ufe0f"),
+        new("Fitness & Sports", "\ud83c\udfcb\ufe0f"),
+        new("Wellness & Beauty", "\u2728"),
+        new("Education", "\ud83c\udf93"),
+    ];
+
     private List<Activity>? recentActivities;
-    private List<Activity>? nearbyActivities;
-    private string? statusMessage;
-    private string? statusDetail;
-    private bool isLoadingNearby;
+    private List<Activity>? filteredActivities;
+    private string? selectedTag;
+    private bool isLoadingFiltered;
+    private int filterRequestVersion;
 
     // Location popup
     private bool showLocationPopup;
@@ -215,35 +236,10 @@
     {
         if (firstRender)
         {
-            LocationService.LocationChanged += OnLocationChanged;
-            ActivityService.DataChanged += OnDataChanged;
+            Logger.LogInformation("Home first render complete");
             LocationService.StartTracking(JS);
 
             await LoadRecentlyViewed();
-            await LoadNearbyActivities();
-        }
-    }
-
-    private async void OnDataChanged()
-    {
-        // Re-read from cache without triggering another discover (avoids loop)
-        await InvokeAsync(async () =>
-        {
-            var radiusMeters = (int)(10 * 1609.34);
-            nearbyActivities = await ActivityService.ListActivitiesAsync();
-            StateHasChanged();
-        });
-    }
-
-    private async void OnLocationChanged()
-    {
-        if (!hasManualLocation)
-        {
-            await InvokeAsync(async () =>
-            {
-                await LoadNearbyActivities();
-                StateHasChanged();
-            });
         }
     }
 
@@ -276,44 +272,94 @@
         }
     }
 
-    private async Task LoadNearbyActivities()
+    private async Task OnTagSelected(string tagName)
     {
-        isLoadingNearby = true;
-        statusDetail = null;
+        Logger.LogInformation("Home tag selected: current={CurrentTag}, requested={RequestedTag}", selectedTag ?? "", tagName);
+
+        if (selectedTag == tagName)
+        {
+            ClearFilter();
+            return;
+        }
+
+        selectedTag = tagName;
+        await LoadFilteredActivities(tagName, "tag_click");
+    }
+
+    private async Task LoadFilteredActivities(string tagName, string trigger)
+    {
+        var requestVersion = Interlocked.Increment(ref filterRequestVersion);
+        isLoadingFiltered = true;
+
+        Logger.LogInformation(
+            "Home tag load {RequestVersion} started: tag={Tag}, trigger={Trigger}, hasActiveLocation={HasActiveLocation}, activeLat={Lat}, activeLng={Lng}",
+            requestVersion, tagName, trigger, hasActiveLocation, activeLat, activeLng);
+
+        await InvokeAsync(StateHasChanged);
+
         try
         {
+            List<Activity> all;
             if (hasActiveLocation)
             {
-                statusMessage = "Discovering activities nearby...";
-                StateHasChanged();
-
                 var radiusMeters = (int)(10 * 1609.34);
-                nearbyActivities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters);
-                statusMessage = null;
-                statusDetail = null;
+                all = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
             }
             else
             {
-                statusMessage = "Loading saved activities from the database...";
-                StateHasChanged();
-                nearbyActivities = await ActivityService.ListActivitiesAsync();
-                statusMessage = null;
-                statusDetail = null;
+                all = await ActivityService.ListActivitiesAsync();
+            }
+
+            var matchingActivities = all
+                .Where(a => GetTagList(a.Category).Contains(tagName))
+                .OrderBy(a => hasActiveLocation ? GetDistanceValue(a) : double.MaxValue)
+                .ThenByDescending(a => a.Rating)
+                .ToList();
+
+            if (requestVersion != filterRequestVersion)
+            {
+                Logger.LogWarning(
+                    "Home tag load {RequestVersion} ignored because a newer request {LatestRequestVersion} already exists",
+                    requestVersion, filterRequestVersion);
+                return;
+            }
+
+            filteredActivities = matchingActivities;
+
+            Logger.LogInformation(
+                "Home tag load {RequestVersion} completed: tag={Tag}, fetched={FetchedCount}, matched={MatchedCount}",
+                requestVersion, tagName, all.Count, matchingActivities.Count);
+
+            if (matchingActivities.Count > 0)
+            {
+                Logger.LogInformation(
+                    "Home tag load {RequestVersion} sample matches for {Tag}: {ActivityNames}",
+                    requestVersion,
+                    tagName,
+                    string.Join(" | ", matchingActivities.Take(8).Select(a => $"{a.Name} [{a.Category}]")));
             }
         }
         catch (Exception ex)
         {
-            var api = Configuration["ApiAddress"] ?? "not set";
-            Logger.LogError(ex, "Home page failed to load activities from {ApiAddress}", api);
-            statusMessage = "Failed to load activities.";
-            statusDetail = $"API={api}; Error={ex.Message}";
-            nearbyActivities = [];
+            Logger.LogError(ex, "Home tag load {RequestVersion} failed for tag {Tag}", requestVersion, tagName);
+            filteredActivities = [];
         }
         finally
         {
-            isLoadingNearby = false;
-            StateHasChanged();
+            if (requestVersion == filterRequestVersion)
+            {
+                isLoadingFiltered = false;
+                StateHasChanged();
+            }
         }
+    }
+
+    private void ClearFilter()
+    {
+        Logger.LogInformation("Home tag cleared from {Tag}", selectedTag ?? "");
+        selectedTag = null;
+        filteredActivities = null;
+        StateHasChanged();
     }
 
     private void ViewDetail(Guid id)
@@ -321,9 +367,25 @@
         Navigation.NavigateTo($"/activity/{id}");
     }
 
-    private void GoToActivities()
+    private static List<string> GetTagList(string? category)
     {
-        Navigation.NavigateTo("/activities");
+        if (string.IsNullOrEmpty(category)) return [];
+        return category.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private static string GetFirstTagIcon(string? category)
+    {
+        var tags = GetTagList(category);
+        if (tags.Count == 0) return "\ud83d\udccd";
+        var first = tags[0];
+        return GetTagIcon(first);
+    }
+
+    private static string GetTagIcon(string? tagName)
+    {
+        if (string.IsNullOrWhiteSpace(tagName)) return "\ud83d\udccd";
+        var match = tagCards.FirstOrDefault(t => t.Name == tagName);
+        return match?.Emoji ?? "\ud83d\udccd";
     }
 
     private string FormatCost(double cost)
@@ -335,6 +397,14 @@
     private string GetDistance(Activity activity)
     {
         if (!hasActiveLocation) return "?";
+        return GetDistanceValue(activity).ToString("0.1");
+    }
+
+    private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    private double GetDistanceValue(Activity activity)
+    {
+        if (!hasActiveLocation) return double.MaxValue;
 
         const double R = 3958.8;
         var dLat = ToRad(activity.Latitude - activeLat);
@@ -343,22 +413,10 @@
                 Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
                 Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return (R * c).ToString("0.1");
+        return R * c;
     }
 
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
-
-    private static string GetCategoryIcon(string? category) => category switch
-    {
-        "Outdoors" => "\ud83c\udf32",
-        "Sports" => "\u26bd",
-        "Arts" => "\ud83c\udfa8",
-        "Food" => "\ud83c\udf54",
-        "Music" => "\ud83c\udfb5",
-        "Education" => "\ud83d\udcda",
-        "Social" => "\ud83c\udf89",
-        _ => "\ud83d\udccd"
-    };
+    // ─── Location Popup (kept from original) ───
 
     private async Task ToggleLocationPopup()
     {
@@ -407,10 +465,14 @@
 
             LocationService.SetManualLocation(lookup.Latitude, lookup.Longitude, lookup.FormattedAddress);
             showLocationPopup = false;
+            userAddress = lookup.FormattedAddress;
 
             Logger.LogInformation("Home page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, activeLat, activeLng);
 
-            await LoadNearbyActivities();
+            if (selectedTag != null)
+            {
+                await LoadFilteredActivities(selectedTag, "manual_location_apply");
+            }
         }
         catch (Exception ex)
         {
@@ -423,12 +485,16 @@
     {
         LocationService.ClearManualLocation();
         showLocationPopup = false;
-        await LoadNearbyActivities();
+
+        if (selectedTag != null)
+        {
+            await LoadFilteredActivities(selectedTag, "use_current_location");
+        }
     }
 
     public void Dispose()
     {
-        LocationService.LocationChanged -= OnLocationChanged;
-        ActivityService.DataChanged -= OnDataChanged;
     }
+
+    private record TagCardInfo(string Name, string Emoji);
 }
