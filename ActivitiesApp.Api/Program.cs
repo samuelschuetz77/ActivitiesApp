@@ -207,9 +207,10 @@ using (var scope = app.Services.CreateScope())
                 await userManager.AddToRoleAsync(admin, "Admin");
         }
     }
-    catch (NpgsqlException ex) when (app.Environment.IsDevelopment() && !dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    catch (NpgsqlException ex) when (!dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
-        startupLog.LogWarning(ex, "Identity Postgres is unavailable in Development. Continuing without applying Identity migrations.");
+        startupLog.LogWarning(ex, "Identity Postgres is unavailable (DbProvider={DbProvider}). Auth endpoints will not work. " +
+            "TODO: Configure POSTGRES_HOST and connection string in Azure App Service when enabling authentication.", dbProvider);
     }
 }
 
