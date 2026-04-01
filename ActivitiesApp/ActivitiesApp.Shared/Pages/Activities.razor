@@ -5,7 +5,6 @@
 @using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
-@inject IJSRuntime JS
 @inject ILogger<Activities> Logger
 @inject LocationService LocationService
 @implements IDisposable
@@ -222,7 +221,7 @@
         {
             LocationService.LocationChanged += OnLocationChanged;
             ActivityService.DataChanged += OnDataChanged;
-            LocationService.StartTracking(JS);
+            LocationService.StartTracking();
 
             await LoadActivities();
         }

@@ -27,15 +27,22 @@ public static class MauiProgram
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddSingleton<IConnectivity>(Connectivity.Current);
 
-        // Configure gRPC client pointing to the API
-        var apiAddress = builder.Configuration["ApiAddress"] ?? "https://localhost:7051";
+        var apiAddress = builder.Configuration["ApiAddress"] ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net";
 
+        // REST HttpClient for OfflineActivityService
+        builder.Services.AddSingleton(sp =>
+        {
+            var client = new HttpClient { BaseAddress = new Uri(apiAddress) };
+            client.Timeout = TimeSpan.FromSeconds(30);
+            return client;
+        });
+
+        // gRPC client (still used by SyncService for delta sync)
         builder.Services.AddSingleton(sp =>
         {
             var channel = GrpcChannel.ForAddress(apiAddress);
             return new ActivityService.ActivityServiceClient(channel);
         });
-        builder.Services.AddSingleton(apiAddress);
 
         // Local SQLite database
         builder.Services.AddDbContext<LocalDbContext>(options =>
@@ -43,6 +50,9 @@ public static class MauiProgram
             var dbPath = Path.Combine(FileSystem.AppDataDirectory, "activities_cache.db");
             options.UseSqlite($"Data Source={dbPath}");
         });
+
+        // Native location provider (triggers Android permission prompt)
+        builder.Services.AddSingleton<ActivitiesApp.Shared.Services.ILocationProvider, ActivitiesApp.Services.MauiLocationProvider>();
 
         // Background location tracking (singleton — polls every 3 min)
         builder.Services.AddSingleton<ActivitiesApp.Shared.Services.LocationService>();

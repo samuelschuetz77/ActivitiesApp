@@ -1,36 +1,31 @@
 using ActivitiesApp.Data;
 using ActivitiesApp.Shared.Models;
 using ActivitiesApp.Shared.Services;
-using ActivitiesApp.Protos;
-using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Json;
 
 namespace ActivitiesApp.Services;
 
 public class OfflineActivityService : IActivityService
 {
     private readonly LocalDbContext _db;
-    private readonly ActivityService.ActivityServiceClient _grpcClient;
+    private readonly HttpClient _http;
     private readonly SyncService _syncService;
     private readonly ActivityCacheService _cache;
     private readonly IConnectivity _connectivity;
     private readonly ILogger<OfflineActivityService> _logger;
-    private readonly string _apiBaseAddress;
 
     public OfflineActivityService(
         LocalDbContext db,
-        ActivityService.ActivityServiceClient grpcClient,
+        HttpClient http,
         SyncService syncService,
         ActivityCacheService cache,
         IConnectivity connectivity,
-        ILogger<OfflineActivityService> logger,
-        string apiBaseAddress)
+        ILogger<OfflineActivityService> logger)
     {
         _db = db;
-        _grpcClient = grpcClient;
-        _apiBaseAddress = apiBaseAddress.TrimEnd('/');
+        _http = http;
         _syncService = syncService;
         _cache = cache;
         _connectivity = connectivity;
@@ -173,7 +168,7 @@ public class OfflineActivityService : IActivityService
 
         if (_connectivity.NetworkAccess == NetworkAccess.Internet)
         {
-            // Background refresh from gRPC
+            // Background refresh from REST
             _ = Task.Run(async () =>
             {
                 try
@@ -185,21 +180,27 @@ public class OfflineActivityService : IActivityService
                         RadiusMeters = radiusMeters,
                         TagName = tagName ?? ""
                     };
+                    var activities = await _http.GetFromJsonAsync<List<Activity>>(
+                        $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}");
 
-                    using var call = _grpcClient.DiscoverActivities(request);
-                    await foreach (var response in call.ResponseStream.ReadAllAsync())
+                    if (activities != null)
                     {
-                        var activity = ToActivityFromResponse(response);
-
-                        var existing = await _db.Activities.FindAsync(activity.Id);
-                        if (existing == null)
+                        foreach (var activity in activities)
                         {
-                            var local = FromSharedActivity(activity);
-                            local.SyncState = SyncState.Synced;
-                            _db.Activities.Add(local);
+                            var existing = await _db.Activities.FindAsync(activity.Id);
+                            if (existing == null)
+                            {
+                                var local = FromSharedActivity(activity);
+                                local.SyncState = SyncState.Synced;
+                                _db.Activities.Add(local);
+                            }
+
+                            _cache.AddOrUpdate(activity);
                         }
 
-                        _cache.AddOrUpdate(activity);
+                        await _db.SaveChangesAsync();
+                        _logger.LogInformation("DiscoverActivities background refresh complete");
+                        DataChanged?.Invoke();
                     }
 
                     await _db.SaveChangesAsync();
@@ -216,7 +217,7 @@ public class OfflineActivityService : IActivityService
         return cached;
     }
 
-    // ─── Google Maps (pass-through, requires online) ───
+    // ─── Google Maps (pass-through via REST, requires online) ───
 
     public async Task<List<NearbyPlace>> SearchNearbyPlacesAsync(
         double lat, double lng, int radiusMeters, string? type = null, string? keyword = null)
@@ -224,37 +225,10 @@ public class OfflineActivityService : IActivityService
         if (_connectivity.NetworkAccess != NetworkAccess.Internet)
             return new List<NearbyPlace>();
 
-        var request = new SearchNearbyRequest
-        {
-            Latitude = lat,
-            Longitude = lng,
-            RadiusMeters = radiusMeters,
-            Type = type ?? "",
-            Keyword = keyword ?? ""
-        };
-
-        var places = new List<NearbyPlace>();
-
-        using var call = _grpcClient.SearchNearbyPlaces(request);
-        await foreach (var result in call.ResponseStream.ReadAllAsync())
-        {
-            places.Add(new NearbyPlace
-            {
-                PlaceId = result.PlaceId,
-                Name = result.Name,
-                Vicinity = result.Vicinity,
-                Latitude = result.Latitude,
-                Longitude = result.Longitude,
-                Rating = result.Rating,
-                UserRatingsTotal = result.UserRatingsTotal,
-                PhotoUrl = ResolveImageUrl(result.PhotoUrl) ?? "",
-                IsOpenNow = result.IsOpenNow,
-                Types = result.Types_.ToList(),
-                PriceLevel = result.PriceLevel
-            });
-        }
-
-        return places;
+        var url = $"/api/places/nearby?lat={lat}&lng={lng}&radiusMeters={radiusMeters}";
+        if (!string.IsNullOrEmpty(type)) url += $"&type={Uri.EscapeDataString(type)}";
+        if (!string.IsNullOrEmpty(keyword)) url += $"&keyword={Uri.EscapeDataString(keyword)}";
+        return await _http.GetFromJsonAsync<List<NearbyPlace>>(url) ?? [];
     }
 
     public async Task<PlaceDetails?> GetPlaceDetailsAsync(string placeId)
@@ -264,34 +238,10 @@ public class OfflineActivityService : IActivityService
 
         try
         {
-            var response = await _grpcClient.GetPlaceDetailsAsync(
-                new GetPlaceDetailsRequest { PlaceId = placeId });
-
-            return new PlaceDetails
-            {
-                PlaceId = response.PlaceId,
-                Name = response.Name,
-                FormattedAddress = response.FormattedAddress,
-                FormattedPhone = response.FormattedPhone,
-                Website = response.Website,
-                Rating = response.Rating,
-                UserRatingsTotal = response.UserRatingsTotal,
-                Latitude = response.Latitude,
-                Longitude = response.Longitude,
-                PhotoUrls = response.PhotoUrls.Select(u => ResolveImageUrl(u) ?? u).ToList(),
-                Reviews = response.Reviews.Select(r => new PlaceReviewData
-                {
-                    AuthorName = r.AuthorName,
-                    Rating = r.Rating,
-                    Text = r.Text,
-                    RelativeTime = r.RelativeTime
-                }).ToList(),
-                OpeningHoursSummary = response.OpeningHoursSummary,
-                PriceLevel = response.PriceLevel,
-                Types = response.Types_.ToList()
-            };
+            return await _http.GetFromJsonAsync<PlaceDetails>(
+                $"/api/places/{Uri.EscapeDataString(placeId)}");
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return null;
         }
@@ -302,9 +252,9 @@ public class OfflineActivityService : IActivityService
         if (_connectivity.NetworkAccess != NetworkAccess.Internet)
             return "Unavailable offline";
 
-        var response = await _grpcClient.ReverseGeocodeAsync(
-            new ReverseGeocodeRequest { Latitude = lat, Longitude = lng });
-        return response.FormattedAddress;
+        var result = await _http.GetFromJsonAsync<ReverseGeocodeResult>(
+            $"/api/geocode/reverse?lat={lat}&lng={lng}");
+        return result?.FormattedAddress ?? "Unknown location";
     }
 
     public async Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode)
@@ -314,18 +264,12 @@ public class OfflineActivityService : IActivityService
 
         try
         {
-            var response = await _grpcClient.LookupZipCodeAsync(
-                new LookupZipCodeRequest { PostalCode = zipCode });
-
-            return new ZipLookupResult
-            {
-                PostalCode = zipCode,
-                FormattedAddress = response.FormattedAddress,
-                Latitude = response.Latitude,
-                Longitude = response.Longitude
-            };
+            var result = await _http.GetFromJsonAsync<ZipLookupResult>(
+                $"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            if (result != null) result.PostalCode = zipCode;
+            return result;
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return null;
         }
@@ -338,17 +282,10 @@ public class OfflineActivityService : IActivityService
 
         try
         {
-            var response = await _grpcClient.GeocodeAddressAsync(
-                new GeocodeAddressRequest { Address = address });
-
-            return new ZipLookupResult
-            {
-                FormattedAddress = response.FormattedAddress,
-                Latitude = response.Latitude,
-                Longitude = response.Longitude
-            };
+            return await _http.GetFromJsonAsync<ZipLookupResult>(
+                $"/api/geocode/address?address={Uri.EscapeDataString(address)}");
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return null;
         }
@@ -402,35 +339,6 @@ public class OfflineActivityService : IActivityService
         };
     }
 
-    private Activity ToActivityFromResponse(ActivityResponse response)
-    {
-        return new Activity
-        {
-            Id = Guid.TryParse(response.Id, out var id) ? id : Guid.NewGuid(),
-            Name = response.Name,
-            City = response.City,
-            Description = response.Description,
-            Cost = response.Cost,
-            Activitytime = response.ActivityTime?.ToDateTime() ?? DateTime.UtcNow,
-            Latitude = response.Latitude,
-            Longitude = response.Longitude,
-            MinAge = response.MinAge,
-            MaxAge = response.MaxAge,
-            Category = string.IsNullOrEmpty(response.Category) ? null : response.Category,
-            ImageUrl = ResolveImageUrl(response.ImageUrl),
-            PlaceId = string.IsNullOrEmpty(response.PlaceId) ? null : response.PlaceId,
-            Rating = response.Rating
-        };
-    }
-
-    private string? ResolveImageUrl(string url)
-    {
-        if (string.IsNullOrEmpty(url)) return null;
-        if (url.StartsWith("/"))
-            return _apiBaseAddress + url;
-        return url;
-    }
-
     private static double GetDistanceMiles(double lat1, double lng1, double lat2, double lng2)
     {
         const double R = 3958.8;
@@ -452,4 +360,5 @@ public class OfflineActivityService : IActivityService
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Any(tag => string.Equals(tag, tagName, StringComparison.OrdinalIgnoreCase));
     }
+    private record ReverseGeocodeResult(string FormattedAddress);
 }

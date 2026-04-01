@@ -237,7 +237,9 @@
         if (firstRender)
         {
             Logger.LogInformation("Home first render complete");
-            LocationService.StartTracking(JS);
+            LocationService.LocationChanged += OnLocationChanged;
+            ActivityService.DataChanged += OnDataChanged;
+            LocationService.StartTracking();
 
             await LoadRecentlyViewed();
         }
