@@ -280,16 +280,45 @@ app.MapGet("/api/activities/{id:guid}", async (Guid id, IActivityDbContext db) =
     return Results.Ok(activity);
 });
 
-app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db, HttpContext httpContext) =>
+app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db, HttpContext httpContext, ILogger<Program> log) =>
 {
+    var validationErrors = ValidateActivityForCreate(activity);
+    if (validationErrors.Count > 0)
+    {
+        var userIdForRejectedRequest = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        log.LogWarning(
+            "REST CreateActivity rejected invalid payload from UserId={UserId}. Errors={ValidationErrors}. Name={Name}, City={City}, Category={Category}",
+            userIdForRejectedRequest ?? "anonymous",
+            string.Join(" | ", validationErrors),
+            activity.Name ?? "",
+            activity.City ?? "",
+            activity.Category ?? "");
+        return Results.ValidationProblem(validationErrors
+            .Select((message, index) => new KeyValuePair<string, string[]>($"activity_{index}", [message]))
+            .ToDictionary());
+    }
+
     activity.Id = Guid.NewGuid();
     var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
     activity.CreatedByUserId = userId;
-    db.Activities.Add(activity);
-    await db.SaveChangesAsync();
-    activitiesCreatedCounter.Add(1,
-        new KeyValuePair<string, object?>("creation_source", "manual"));
-    return Results.Created($"/api/activities/{activity.Id}", activity);
+    try
+    {
+        db.Activities.Add(activity);
+        await db.SaveChangesAsync();
+        log.LogInformation(
+            "REST CreateActivity created ActivityId={ActivityId} for UserId={UserId}, Name={Name}, City={City}",
+            activity.Id, userId ?? "anonymous", activity.Name, activity.City);
+        activitiesCreatedCounter.Add(1,
+            new KeyValuePair<string, object?>("creation_source", "manual"));
+        return Results.Created($"/api/activities/{activity.Id}", activity);
+    }
+    catch (Exception ex)
+    {
+        log.LogError(ex,
+            "REST CreateActivity failed for UserId={UserId}, Name={Name}, City={City}",
+            userId ?? "anonymous", activity.Name ?? "", activity.City ?? "");
+        return Results.Problem("Failed to create activity.");
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName,
@@ -537,6 +566,28 @@ static async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync
     }
 
     return deduped.Values.ToList();
+}
+
+static List<string> ValidateActivityForCreate(ActivitiesApp.Infrastructure.Models.Activity activity)
+{
+    var errors = new List<string>();
+
+    if (string.IsNullOrWhiteSpace(activity.Name))
+        errors.Add("Name is required.");
+    if (string.IsNullOrWhiteSpace(activity.City))
+        errors.Add("City is required.");
+    if (activity.MinAge < 0)
+        errors.Add("Minimum age cannot be negative.");
+    if (activity.MaxAge < activity.MinAge)
+        errors.Add("Maximum age must be greater than or equal to minimum age.");
+    if (activity.Latitude is < -90 or > 90)
+        errors.Add("Latitude must be between -90 and 90.");
+    if (activity.Longitude is < -180 or > 180)
+        errors.Add("Longitude must be between -180 and 180.");
+    if (activity.Activitytime == default)
+        errors.Add("Activity time is required.");
+
+    return errors;
 }
 
 app.Run();
