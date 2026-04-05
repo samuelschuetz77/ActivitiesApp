@@ -17,8 +17,21 @@ public class ActivityRestClient : IActivityService
 
     public async Task<Activity> CreateActivityAsync(Activity activity)
     {
+        _logger.LogInformation(
+            "REST CreateActivity starting for Name={Name}, City={City}, Category={Category}",
+            activity.Name ?? "", activity.City ?? "", activity.Category ?? "");
         var response = await _http.PostAsJsonAsync("/api/activities", activity);
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            _logger.LogError(
+                "REST CreateActivity failed with StatusCode={StatusCode} for Name={Name}, City={City}. Response={ResponseBody}",
+                (int)response.StatusCode, activity.Name ?? "", activity.City ?? "", responseBody);
+        }
         response.EnsureSuccessStatusCode();
+        _logger.LogInformation(
+            "REST CreateActivity completed for Name={Name}, City={City}",
+            activity.Name ?? "", activity.City ?? "");
         return (await response.Content.ReadFromJsonAsync<Activity>())!;
     }
 

@@ -2,6 +2,7 @@
 @using ActivitiesApp.Shared.Services
 @using ActivitiesApp.Shared.Models
 @using Microsoft.AspNetCore.Components.Forms
+@using System.Net.Http
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject ILogger<CreateActivity> Logger
@@ -11,7 +12,7 @@
 <div class="create-activity-page">
     <h2>Create a New Activity</h2>
 
-    <EditForm Model="@newActivity" OnValidSubmit="HandleValidSubmit">
+    <EditForm Model="@newActivity" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
@@ -152,6 +153,9 @@
         if (imagePreviews.Count + files.Count > MaxImages)
         {
             imageError = $"Maximum {MaxImages} images allowed.";
+            Logger.LogWarning(
+                "CreateActivity rejected image selection because the user selected too many files. ExistingCount={ExistingCount}, SelectedCount={SelectedCount}, MaxImages={MaxImages}",
+                imagePreviews.Count, files.Count, MaxImages);
             return;
         }
 
@@ -160,6 +164,9 @@
             if (file.Size > MaxFileSize)
             {
                 imageError = $"'{file.Name}' exceeds 5MB limit.";
+                Logger.LogWarning(
+                    "CreateActivity rejected image {FileName} because it exceeded the size limit. FileSizeBytes={FileSizeBytes}, MaxFileSizeBytes={MaxFileSizeBytes}",
+                    file.Name, file.Size, MaxFileSize);
                 continue;
             }
 
@@ -198,8 +205,21 @@
         isSubmitting = true;
         StateHasChanged();
 
+        Logger.LogInformation(
+            "CreateActivity submit started for Name={Name}, City={City}, Category={Category}",
+            newActivity.Name ?? "", newActivity.City ?? "", newActivity.Category ?? "");
+
         try
         {
+            if (newActivity.MaxAge < newActivity.MinAge)
+            {
+                errorMessage = "Max age must be greater than or equal to min age.";
+                Logger.LogWarning(
+                    "CreateActivity submit blocked because MaxAge was less than MinAge. MinAge={MinAge}, MaxAge={MaxAge}, Name={Name}",
+                    newActivity.MinAge, newActivity.MaxAge, newActivity.Name ?? "");
+                return;
+            }
+
             // Build address string and geocode
             var addressParts = new List<string>();
             if (!string.IsNullOrWhiteSpace(streetAddress)) addressParts.Add(streetAddress.Trim());
@@ -213,6 +233,9 @@
             if (string.IsNullOrWhiteSpace(fullAddress))
             {
                 errorMessage = "Please enter an address.";
+                Logger.LogWarning(
+                    "CreateActivity submit blocked because the address was empty. Name={Name}, City={City}",
+                    newActivity.Name ?? "", newActivity.City ?? "");
                 return;
             }
 
@@ -220,6 +243,9 @@
             if (geocoded == null)
             {
                 errorMessage = "Could not find that address. Please check and try again.";
+                Logger.LogWarning(
+                    "CreateActivity geocode returned no result for Address={Address}, Name={Name}, City={City}",
+                    fullAddress, newActivity.Name ?? "", newActivity.City ?? "");
                 return;
             }
 
@@ -233,6 +259,9 @@
             }
 
             var created = await ActivityService.CreateActivityAsync(newActivity);
+            Logger.LogInformation(
+                "CreateActivity submit succeeded for ActivityId={ActivityId}, Name={Name}, City={City}",
+                created.Id, created.Name ?? "", created.City ?? "");
             successMessage = $"Activity '{created.Name}' in '{created.City}' saved successfully!";
 
             // Reset form
@@ -243,9 +272,18 @@
             zipCode = "";
             imagePreviews.Clear();
         }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogError(ex,
+                "CreateActivity submit failed with HTTP error for Name={Name}, City={City}",
+                newActivity.Name ?? "", newActivity.City ?? "");
+            errorMessage = "Failed to create activity. Please try again.";
+        }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to create activity");
+            Logger.LogError(ex,
+                "CreateActivity submit failed unexpectedly for Name={Name}, City={City}",
+                newActivity.Name ?? "", newActivity.City ?? "");
             errorMessage = "Failed to create activity. Please try again.";
         }
         finally
@@ -253,5 +291,16 @@
             isSubmitting = false;
             StateHasChanged();
         }
+    }
+
+    private void HandleInvalidSubmit(EditContext editContext)
+    {
+        var validationMessages = editContext.GetValidationMessages().ToList();
+        Logger.LogWarning(
+            "CreateActivity client-side validation failed with {ValidationErrorCount} errors: {ValidationErrors}",
+            validationMessages.Count,
+            string.Join(" | ", validationMessages));
+        errorMessage = "Please fix the highlighted form errors and try again.";
+        successMessage = null;
     }
 }
