@@ -150,7 +150,7 @@ data:
           "targets": [
             {
               "editorMode": "code",
-              "expr": "sum by (service_name, detected_level) (count_over_time({service_name=~\"activitiesapp-(api|web)\", detected_level=~\"warn|error\"}[5m]))",
+              "expr": "sum by (service_name, detected_level) (count_over_time({service_name=~\"activitiesapp-(api|web)\"} | detected_level=~\"warn|error\"[5m]))",
               "legendFormat": "{{service_name}} {{detected_level}}",
               "queryType": "range",
               "refId": "A"
@@ -229,7 +229,7 @@ data:
           "targets": [
             {
               "editorMode": "code",
-              "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"warn|error\"}",
+              "expr": "{service_name=~\"activitiesapp-(api|web)\"} | detected_level=~\"warn|error\"",
               "queryType": "range",
               "refId": "A"
             }
