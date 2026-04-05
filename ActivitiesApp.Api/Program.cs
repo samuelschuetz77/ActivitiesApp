@@ -5,8 +5,6 @@ using ActivitiesApp.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -31,6 +29,8 @@ builder.Services.AddGrpc();
 // Determine database provider from environment
 var dbProvider = builder.Configuration["DATABASE_PROVIDER"] ?? "Cosmos";
 var defaultPostgresHost = builder.Environment.IsDevelopment() ? "localhost" : "postgres";
+var runMigrationsOnStartup =
+    string.Equals(builder.Configuration["RUN_DB_MIGRATIONS_ON_STARTUP"], "true", StringComparison.OrdinalIgnoreCase);
 
 if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
 {
@@ -133,6 +133,7 @@ var app = builder.Build();
 
 var startupLog = app.Services.GetRequiredService<ILogger<Program>>();
 var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
+startupLog.LogInformation("Automatic DB migrations on startup: {Enabled}", runMigrationsOnStartup);
 startupLog.LogInformation("API starting — DbProvider={DbProvider}, Version={Version}, Env={Env}",
     dbProvider, appVersion, app.Environment.EnvironmentName);
 
@@ -142,30 +143,27 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
-        await pgContext.Database.MigrateAsync();
-        startupLog.LogInformation("Postgres migrations applied");
+        if (runMigrationsOnStartup)
+        {
+            await pgContext.Database.MigrateAsync();
+            startupLog.LogInformation("Postgres migrations applied");
 
-        try
-        {
-            await pgContext.Activities.AnyAsync();
+            // Seed from Cosmos -> Postgres only if Postgres is empty
+            var hasData = await pgContext.Activities.AnyAsync();
+            if (!hasData)
+            {
+                var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
+                await seedService.SeedAsync();
+            }
+            else
+            {
+            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
         }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
-        {
-            startupLog.LogWarning(ex, "Postgres schema missing after migrations; creating tables directly from the EF model");
-            var databaseCreator = pgContext.GetService<IRelationalDatabaseCreator>();
-            await databaseCreator.CreateTablesAsync();
-        }
-
-        // Seed from Cosmos -> Postgres only if Postgres is empty
-        var hasData = await pgContext.Activities.AnyAsync();
-        if (!hasData)
-        {
-            var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
-            await seedService.SeedAsync();
         }
         else
         {
-            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            startupLog.LogInformation(
+                "Skipping Postgres migrations and seed on startup. Set RUN_DB_MIGRATIONS_ON_STARTUP=true to enable them.");
         }
     }
     else
@@ -177,34 +175,41 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        // Always migrate and seed Identity when Postgres is available.
-        var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
-        await identityContext.Database.MigrateAsync();
-        startupLog.LogInformation("Identity migrations applied");
-
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-
-        string[] roles = ["Admin", "User"];
-        foreach (var role in roles)
+        if (runMigrationsOnStartup)
         {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole(role));
-        }
+            var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+            await identityContext.Database.MigrateAsync();
+            startupLog.LogInformation("Identity migrations applied");
 
-        var adminEmail = "admin@activitiesapp.com";
-        if (await userManager.FindByEmailAsync(adminEmail) == null)
-        {
-            var admin = new ApplicationUser
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            string[] roles = ["Admin", "User"];
+            foreach (var role in roles)
             {
-                UserName = adminEmail,
-                Email = adminEmail,
-                DisplayName = "Admin",
-                EmailConfirmed = true
-            };
-            var result = await userManager.CreateAsync(admin, "Admin123!");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(admin, "Admin");
+                if (!await roleManager.RoleExistsAsync(role))
+                    await roleManager.CreateAsync(new IdentityRole(role));
+            }
+
+            var adminEmail = "admin@activitiesapp.com";
+            if (await userManager.FindByEmailAsync(adminEmail) == null)
+            {
+                var admin = new ApplicationUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    DisplayName = "Admin",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(admin, "Admin123!");
+                if (result.Succeeded)
+                    await userManager.AddToRoleAsync(admin, "Admin");
+            }
+        }
+        else
+        {
+            startupLog.LogInformation(
+                "Skipping Identity migrations and seed on startup. Set RUN_DB_MIGRATIONS_ON_STARTUP=true to enable them.");
         }
     }
     catch (NpgsqlException ex) when (!dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))

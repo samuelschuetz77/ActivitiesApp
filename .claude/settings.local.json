@@ -32,7 +32,8 @@
       "Bash(git push:*)",
       "WebSearch",
       "WebFetch(domain:developers.google.com)",
-      "Bash(dotnet add:*)"
+      "Bash(dotnet add:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
