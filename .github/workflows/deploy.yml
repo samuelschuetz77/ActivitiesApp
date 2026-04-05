@@ -82,6 +82,9 @@ jobs:
         run: |
           kubectl apply -f k8s
 
+      - name: Restart Grafana to pick up ConfigMap changes
+        run: kubectl rollout restart deployment/grafana --namespace=activitiesapp
+
       - name: Set deployment images
         run: |
           kubectl set image deployment/activitiesapp-api \
