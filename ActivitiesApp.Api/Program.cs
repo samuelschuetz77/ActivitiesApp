@@ -223,6 +223,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
+
+// Temporary: emit test warning/error so Grafana "Error Count and Warnings" panel has data
+app.Logger.LogWarning("Test warning for observability");
+app.Logger.LogError("Test error for observability");
+
 app.MapGet("/", () => $"ActivitiesApp gRPC API is running (v{appVersion}, db={dbProvider}). Use a gRPC client to communicate.");
 
 // Diagnostic endpoints
