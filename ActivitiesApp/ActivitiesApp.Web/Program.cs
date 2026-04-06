@@ -26,7 +26,12 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 // Configure REST client pointing to the API (no gRPC — plain HTTP/1.1 JSON)
-var apiAddress = "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net/";
+var apiAddress = builder.Environment.IsDevelopment()
+    ? builder.Configuration["Services:activitiesapp-api:https:0"]
+        ?? builder.Configuration["ApiAddress"]
+        ?? "https://localhost:7051"
+    : builder.Configuration["ApiAddress"]
+        ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net/";
 
 builder.Services.AddHttpClient<ActivityRestClient>(client =>
 {
