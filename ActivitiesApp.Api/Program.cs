@@ -227,6 +227,23 @@ app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Add cache headers to photo endpoints so browsers/MAUI HTTP clients cache images
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/photos"))
+    {
+        context.Response.OnStarting(() =>
+        {
+            if (context.Response.StatusCode == 200)
+            {
+                context.Response.Headers.CacheControl = "public, max-age=86400, immutable";
+            }
+            return Task.CompletedTask;
+        });
+    }
+    await next();
+});
+
 app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 
 // Temporary: emit test warning/error so Grafana "Error Count and Warnings" panel has data
@@ -325,7 +342,8 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
     IActivityDbContext db, GooglePlacesService places, ILogger<Program> log) =>
 {
     var radius = radiusMeters ?? 16093;
-    log.LogInformation("REST DiscoverActivities at ({Lat},{Lng}) radius={Radius}m tag={Tag}", lat, lng, radius, tagName ?? "");
+    var discoverRequestId = Guid.NewGuid().ToString("N")[..8];
+    log.LogInformation("REST Discover {RequestId} started at ({Lat},{Lng}) radius={Radius}m tag={Tag}", discoverRequestId, lat, lng, radius, tagName ?? "");
 
     List<GooglePlacesService.NearbyPlace> googlePlaces;
     try
@@ -333,11 +351,11 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
         googlePlaces = string.IsNullOrWhiteSpace(tagName)
             ? await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: "fun things to do")
             : await SearchPlacesForTagAsync(lat, lng, radius, tagName, places, log);
-        log.LogInformation("REST Discover got {Count} Google places", googlePlaces.Count);
+        log.LogInformation("REST Discover {RequestId} got {Count} Google places", discoverRequestId, googlePlaces.Count);
     }
     catch (Exception ex)
     {
-        log.LogError(ex, "REST Discover Google search failed for tag {Tag}, falling back to DB only", tagName ?? "");
+        log.LogError(ex, "REST Discover {RequestId} Google search failed for tag {Tag}, falling back to DB only", discoverRequestId, tagName ?? "");
         googlePlaces = [];
     }
 
@@ -362,12 +380,11 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
 
         if (existingByPlaceId.TryGetValue(place.PlaceId, out var existing))
         {
-            existing.Category = category;
-            existing.Rating = place.Rating;
-            existing.Latitude = place.Latitude;
-            existing.Longitude = place.Longitude;
-            existing.ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
-            updatedExistingCount++;
+            var wasUpdated = ApplyGooglePlaceData(existing, place, category);
+            if (wasUpdated)
+            {
+                updatedExistingCount++;
+            }
             FixImageUrl(existing);
             results.Add(existing);
         }
@@ -386,7 +403,7 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
                 MinAge = 0,
                 MaxAge = 99,
                 Category = category,
-                ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
+                ImageUrl = GetPreferredPlaceImageUrl(place),
                 PlaceId = place.PlaceId,
                 Rating = place.Rating
             };
@@ -403,12 +420,116 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
 
     if (newActivities.Count > 0 || updatedExistingCount > 0)
     {
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            log.LogWarning(
+                ex,
+                "REST Discover {RequestId} hit a concurrency conflict while saving {NewCount} new and {UpdatedCount} updated rows. Returning current results anyway.",
+                discoverRequestId,
+                newActivities.Count,
+                updatedExistingCount);
+        }
     }
 
+    var fastCount = results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos?r="));
+    var slowCount = results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos/place/"));
+    var noneCount = results.Count(a => string.IsNullOrWhiteSpace(a.ImageUrl));
+
     log.LogInformation(
-        "REST Discover returning {Count} activities with {NewCount} new and {UpdatedCount} updated existing rows",
-        results.Count, newActivities.Count, updatedExistingCount);
+        "REST Discover {RequestId} returning {Count} activities with {NewCount} new and {UpdatedCount} updated existing rows, withImages={ImageCount}, imagePaths: fast={Fast}, slow={Slow}, none={None}",
+        discoverRequestId, results.Count, newActivities.Count, updatedExistingCount,
+        results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)), fastCount, slowCount, noneCount);
+
+    // Pre-warm photo cache in background so images load instantly on the client
+    var memCache = app.Services.GetRequiredService<IMemoryCache>();
+    var fastUrlsToWarm = results
+        .Where(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos?r="))
+        .Select(a => a.ImageUrl!)
+        .Distinct()
+        .ToList();
+    var placeUrlsToWarm = results
+        .Where(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos/place/"))
+        .Select(a => a.ImageUrl!)
+        .Distinct()
+        .ToList();
+    var capturedRequestId = discoverRequestId;
+
+    _ = Task.Run(async () =>
+    {
+        var photoSw = System.Diagnostics.Stopwatch.StartNew();
+        var warmed = 0;
+        using var scope = app.Services.CreateScope();
+        var bgPlaces = scope.ServiceProvider.GetRequiredService<GooglePlacesService>();
+        var bgLog = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        // Pre-warm fast-path URLs (/api/photos?r={ref})
+        foreach (var url in fastUrlsToWarm)
+        {
+            try
+            {
+                var qs = System.Web.HttpUtility.ParseQueryString(url.Split('?').Last());
+                var photoRef = qs["r"];
+                var maxW = int.TryParse(qs["maxwidth"], out var w) ? w : 400;
+                if (!string.IsNullOrEmpty(photoRef))
+                {
+                    var ck = $"photo_ref:{photoRef}:{maxW}";
+                    if (!memCache.TryGetValue(ck, out byte[]? _))
+                    {
+                        var bytes = await bgPlaces.FetchPhotoAsync(photoRef, maxW);
+                        if (bytes != null)
+                        {
+                            memCache.Set(ck, bytes, TimeSpan.FromHours(24));
+                            warmed++;
+                        }
+                    }
+                }
+            }
+            catch { /* best-effort pre-warm */ }
+        }
+
+        // Pre-warm slow-path URLs (/api/photos/place/{placeId})
+        foreach (var url in placeUrlsToWarm)
+        {
+            try
+            {
+                // Extract placeId from URL like /api/photos/place/{placeId}?maxwidth=400
+                var pathPart = url.Split('?')[0];
+                var placeId = pathPart.Split('/').Last();
+                var qs = System.Web.HttpUtility.ParseQueryString(url.Contains('?') ? url.Split('?').Last() : "");
+                var maxW = int.TryParse(qs["maxwidth"], out var w) ? w : 400;
+
+                var ck = $"photo_place:{placeId}:{maxW}";
+                if (!memCache.TryGetValue(ck, out byte[]? _))
+                {
+                    var details = await bgPlaces.GetPlaceDetailsAsync(placeId);
+                    var photoUrl = details?.PhotoUrls?.FirstOrDefault();
+                    if (photoUrl != null)
+                    {
+                        var refQs = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
+                        var photoRef = refQs["r"];
+                        if (!string.IsNullOrEmpty(photoRef))
+                        {
+                            var bytes = await bgPlaces.FetchPhotoAsync(photoRef, maxW);
+                            if (bytes != null)
+                            {
+                                memCache.Set(ck, bytes, TimeSpan.FromHours(24));
+                                warmed++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { /* best-effort pre-warm */ }
+        }
+
+        bgLog.LogInformation("REST Discover {RequestId} photo pre-warm: {Warmed}/{Total} photos ({FastUrls} fast + {PlaceUrls} place) in {Ms}ms",
+            capturedRequestId, warmed, fastUrlsToWarm.Count + placeUrlsToWarm.Count, fastUrlsToWarm.Count, placeUrlsToWarm.Count, photoSw.ElapsedMilliseconds);
+    });
+
     return Results.Ok(results);
 });
 
@@ -446,39 +567,58 @@ app.MapGet("/api/geocode/address", async (string address, GooglePlacesService pl
 });
 
 // Legacy photo proxy — serves Google Places photos by raw photo reference
-app.MapGet("/api/photos", async (string r, int? maxwidth, GooglePlacesService places, IMemoryCache cache) =>
+app.MapGet("/api/photos", async (string r, int? maxwidth, GooglePlacesService places, IMemoryCache cache, ILogger<Program> log) =>
 {
     var width = maxwidth ?? 400;
     var cacheKey = $"photo_ref:{r}:{width}";
 
     if (cache.TryGetValue(cacheKey, out byte[]? cached) && cached != null)
-        return Results.File(cached, "image/jpeg");
+    {
+        log.LogDebug("Photo proxy cache hit: ref={PhotoRef}, width={Width}, bytes={ByteCount}", r, width, cached.Length);
+        return Results.File(cached, "image/jpeg", enableRangeProcessing: false, lastModified: null,
+            entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{cacheKey.GetHashCode():x}\""));
+    }
+
+    log.LogInformation("Photo proxy cache miss: ref={PhotoRef}, width={Width}", r, width);
 
     var imageBytes = await places.FetchPhotoAsync(r, width);
     if (imageBytes is null)
+    {
+        log.LogWarning("Photo proxy fetch failed: ref={PhotoRef}, width={Width}", r, width);
         return Results.NotFound();
+    }
 
     cache.Set(cacheKey, imageBytes, TimeSpan.FromHours(24));
-    return Results.File(imageBytes, "image/jpeg");
+    log.LogInformation("Photo proxy fetched: ref={PhotoRef}, width={Width}, bytes={ByteCount}", r, width, imageBytes.Length);
+    return Results.File(imageBytes, "image/jpeg", enableRangeProcessing: false, lastModified: null,
+        entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{cacheKey.GetHashCode():x}\""));
 });
 
 // Place-based photo endpoint — uses PlaceId (never expires) to get fresh photos
-app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, GooglePlacesService places, IMemoryCache cache) =>
+app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, GooglePlacesService places, IMemoryCache cache, ILogger<Program> log) =>
 {
     var width = maxwidth ?? 400;
     var cacheKey = $"photo_place:{placeId}:{width}";
 
     if (cache.TryGetValue(cacheKey, out byte[]? cached) && cached != null)
-        return Results.File(cached, "image/jpeg");
+    {
+        log.LogDebug("Photo place cache hit: placeId={PlaceId}, width={Width}", placeId, width);
+        return Results.File(cached, "image/jpeg", enableRangeProcessing: false, lastModified: null,
+            entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{cacheKey.GetHashCode():x}\""));
+    }
+
+    log.LogInformation("Photo place cache miss: placeId={PlaceId}, width={Width}", placeId, width);
 
     // Get fresh photo reference from Google Place Details
     var details = await places.GetPlaceDetailsAsync(placeId);
     var photoUrl = details?.PhotoUrls?.FirstOrDefault();
     if (photoUrl is null)
+    {
+        log.LogWarning("Photo place no photos: placeId={PlaceId}", placeId);
         return Results.NotFound();
+    }
 
     // photoUrl is "/api/photos?r={ref}&maxwidth=800" — extract the reference
-    var uri = new Uri(photoUrl, UriKind.Relative);
     var query = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
     var photoRef = query["r"];
     if (string.IsNullOrEmpty(photoRef))
@@ -489,12 +629,20 @@ app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, 
         return Results.NotFound();
 
     cache.Set(cacheKey, imageBytes, TimeSpan.FromHours(24));
-    return Results.File(imageBytes, "image/jpeg");
+    log.LogInformation("Photo place fetched: placeId={PlaceId}, width={Width}, bytes={ByteCount}", placeId, width, imageBytes.Length);
+    return Results.File(imageBytes, "image/jpeg", enableRangeProcessing: false, lastModified: null,
+        entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{cacheKey.GetHashCode():x}\""));
 });
 
 // Ensures ImageUrl uses the place-based endpoint (never expires) when a PlaceId is available
 void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
 {
+    if (!string.IsNullOrEmpty(activity.ImageUrl) &&
+        (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")))
+    {
+        return;
+    }
+
     // If we have a PlaceId, always use the place-based endpoint
     if (!string.IsNullOrEmpty(activity.PlaceId))
     {
@@ -506,6 +654,57 @@ void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
     if (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")) return;
     // Raw Google photo reference — convert to proxy URL (legacy fallback)
     activity.ImageUrl = $"/api/photos?r={Uri.EscapeDataString(activity.ImageUrl)}&maxwidth=400";
+}
+
+static bool ApplyGooglePlaceData(
+    ActivitiesApp.Infrastructure.Models.Activity activity,
+    GooglePlacesService.NearbyPlace place,
+    string category)
+{
+    var desiredImageUrl = GetPreferredPlaceImageUrl(place);
+    var changed = false;
+
+    if (!string.Equals(activity.Category, category, StringComparison.Ordinal))
+    {
+        activity.Category = category;
+        changed = true;
+    }
+
+    if (activity.Rating != place.Rating)
+    {
+        activity.Rating = place.Rating;
+        changed = true;
+    }
+
+    if (activity.Latitude != place.Latitude)
+    {
+        activity.Latitude = place.Latitude;
+        changed = true;
+    }
+
+    if (activity.Longitude != place.Longitude)
+    {
+        activity.Longitude = place.Longitude;
+        changed = true;
+    }
+
+    if (!string.Equals(activity.ImageUrl, desiredImageUrl, StringComparison.Ordinal))
+    {
+        activity.ImageUrl = desiredImageUrl;
+        changed = true;
+    }
+
+    return changed;
+}
+
+static string GetPreferredPlaceImageUrl(GooglePlacesService.NearbyPlace place)
+{
+    if (!string.IsNullOrWhiteSpace(place.PhotoUrl))
+    {
+        return place.PhotoUrl;
+    }
+
+    return $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
 }
 
 static async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync(

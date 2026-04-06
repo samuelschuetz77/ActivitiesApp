@@ -53,21 +53,37 @@ public class LocationService : IDisposable
         {
             var (lat, lng) = await _locationProvider.GetLocationAsync();
 
+            // Only fire LocationChanged if the position actually moved (>~100m)
+            var moved = !HasLocation || Math.Abs(lat - Latitude) > 0.001 || Math.Abs(lng - Longitude) > 0.001;
+
             Latitude = lat;
             Longitude = lng;
             HasLocation = true;
             LastError = null;
-            _logger.LogInformation("Location updated: {Lat}, {Lng}", Latitude, Longitude);
-            LocationChanged?.Invoke();
+
+            if (moved)
+            {
+                _logger.LogInformation("Location updated (moved): {Lat}, {Lng}", Latitude, Longitude);
+                LocationChanged?.Invoke();
+            }
+            else
+            {
+                _logger.LogDebug("Location unchanged: {Lat}, {Lng} — skipping LocationChanged", Latitude, Longitude);
+            }
         }
         catch (Exception ex)
         {
+            var wasLocated = HasLocation;
             Latitude = 0;
             Longitude = 0;
             HasLocation = false;
             LastError = ex.Message;
-            _logger.LogWarning(ex, "Failed to get location");
-            LocationChanged?.Invoke();
+            _logger.LogWarning(ex, "Location failed: wasLocated={WasLocated}, firingChanged={Firing}",
+                wasLocated, wasLocated);
+            if (wasLocated)
+            {
+                LocationChanged?.Invoke();
+            }
         }
     }
 

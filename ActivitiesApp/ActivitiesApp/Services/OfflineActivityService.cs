@@ -15,6 +15,7 @@ public class OfflineActivityService : IActivityService
     private readonly ActivityCacheService _cache;
     private readonly IConnectivity _connectivity;
     private readonly ILogger<OfflineActivityService> _logger;
+    private readonly string? _apiBaseAddress;
 
     public OfflineActivityService(
         LocalDbContext db,
@@ -30,6 +31,7 @@ public class OfflineActivityService : IActivityService
         _cache = cache;
         _connectivity = connectivity;
         _logger = logger;
+        _apiBaseAddress = _http.BaseAddress?.ToString().TrimEnd('/');
     }
 
     public event Action? DataChanged;
@@ -63,7 +65,7 @@ public class OfflineActivityService : IActivityService
         _db.Activities.Add(local);
         await _db.SaveChangesAsync();
 
-        var result = ToSharedActivity(local);
+        var result = NormalizeActivity(ToSharedActivity(local));
         _cache.AddOrUpdate(result);
 
         _logger.LogInformation("CreateActivityAsync: {Ms}ms", sw.ElapsedMilliseconds);
@@ -77,16 +79,18 @@ public class OfflineActivityService : IActivityService
     public Task<Activity?> GetActivityAsync(Guid id)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = _cache.Get(id);
-        _logger.LogDebug("GetActivityAsync({Id}): {Ms}ms (cache)", id, sw.ElapsedMilliseconds);
+        var result = NormalizeActivity(_cache.Get(id));
+        _logger.LogDebug("GetActivityAsync({Id}): {Ms}ms (cache), hasImage={HasImage}, imageUrl={ImageUrl}",
+            id, sw.ElapsedMilliseconds, !string.IsNullOrWhiteSpace(result?.ImageUrl), result?.ImageUrl ?? "");
         return Task.FromResult(result);
     }
 
     public Task<List<Activity>> ListActivitiesAsync()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = _cache.GetAll();
-        _logger.LogDebug("ListActivitiesAsync: {Ms}ms, {Count} items (cache)", sw.ElapsedMilliseconds, result.Count);
+        var result = NormalizeActivities(_cache.GetAll());
+        _logger.LogDebug("ListActivitiesAsync: {Ms}ms, {Count} items (cache), withImages={ImageCount}",
+            sw.ElapsedMilliseconds, result.Count, result.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)));
         return Task.FromResult(result);
     }
 
@@ -98,19 +102,34 @@ public class OfflineActivityService : IActivityService
 
         // Return cached data filtered by distance
         var radiusMiles = radiusMeters / 1609.34;
-        var cached = _cache.GetAll()
+        var cached = NormalizeActivities(_cache.GetAll())
             .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
             .Where(a => string.IsNullOrWhiteSpace(tagName) || HasTag(a.Category, tagName))
             .ToList();
-        _logger.LogDebug(
-            "DiscoverActivitiesAsync: returning {Count} cached items within {Radius}mi for tag {Tag} in {Ms}ms",
-            cached.Count, radiusMiles, tagName ?? "", sw.ElapsedMilliseconds);
+        if (cached.Count == 0)
+        {
+            _logger.LogWarning(
+                "DiscoverActivitiesAsync: returning EMPTY cache for tag={Tag} at ({Lat},{Lng}) radius={Radius}mi in {Ms}ms — background refresh will follow",
+                tagName ?? "", lat, lng, radiusMiles, sw.ElapsedMilliseconds);
+        }
+        else
+        {
+            _logger.LogDebug(
+                "DiscoverActivitiesAsync: returning {Count} cached items within {Radius}mi for tag {Tag} in {Ms}ms, withImages={ImageCount}, sampleImages={SampleImages}",
+                cached.Count,
+                radiusMiles,
+                tagName ?? "",
+                sw.ElapsedMilliseconds,
+                cached.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)),
+                string.Join(" | ", cached.Take(5).Select(a => a.ImageUrl ?? "<null>")));
+        }
 
         if (_connectivity.NetworkAccess == NetworkAccess.Internet)
         {
             // Background refresh from REST
             _ = Task.Run(async () =>
             {
+                var refreshSw = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     var tagQuery = string.IsNullOrWhiteSpace(tagName)
@@ -150,13 +169,25 @@ public class OfflineActivityService : IActivityService
                                 existing.SyncState = SyncState.Synced;
                             }
 
-                            _cache.AddOrUpdate(activity);
+                            _cache.AddOrUpdate(NormalizeActivity(activity), suppressNotify: true);
                         }
 
                         await _db.SaveChangesAsync();
                     }
 
-                    _logger.LogInformation("DiscoverActivities background refresh complete for tag {Tag}", tagName ?? "");
+                    var refreshed = NormalizeActivities(_cache.GetAll())
+                        .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
+                        .Where(a => string.IsNullOrWhiteSpace(tagName) || HasTag(a.Category, tagName))
+                        .ToList();
+
+                    _logger.LogInformation(
+                        "DiscoverActivities background refresh complete for tag {Tag}, refreshedCount={Count}, withImages={ImageCount}, elapsed={Ms}ms, sampleImages={SampleImages}",
+                        tagName ?? "",
+                        refreshed.Count,
+                        refreshed.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)),
+                        refreshSw.ElapsedMilliseconds,
+                        string.Join(" | ", refreshed.Take(3).Select(a => a.ImageUrl ?? "<null>")));
+                    // Single notification after all updates, not per-activity
                     DataChanged?.Invoke();
                 }
                 catch (Exception ex)
@@ -312,5 +343,27 @@ public class OfflineActivityService : IActivityService
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Any(tag => string.Equals(tag, tagName, StringComparison.OrdinalIgnoreCase));
     }
+
+    private List<Activity> NormalizeActivities(List<Activity> activities)
+    {
+        foreach (var activity in activities)
+        {
+            NormalizeActivity(activity);
+        }
+
+        return activities;
+    }
+
+    private Activity? NormalizeActivity(Activity? activity)
+    {
+        if (activity == null)
+        {
+            return null;
+        }
+
+        activity.ImageUrl = ImageUrlResolver.Resolve(activity.ImageUrl, _apiBaseAddress);
+        return activity;
+    }
+
     private record ReverseGeocodeResult(string FormattedAddress);
 }

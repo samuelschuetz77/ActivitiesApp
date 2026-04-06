@@ -57,9 +57,17 @@ public class ActivityCacheService
         return activity;
     }
 
-    public void AddOrUpdate(Activity activity)
+    public void AddOrUpdate(Activity activity, bool suppressNotify = false)
     {
         _cache[activity.Id] = activity;
+        if (!suppressNotify)
+        {
+            DataChanged?.Invoke();
+        }
+    }
+
+    public void NotifyDataChanged()
+    {
         DataChanged?.Invoke();
     }
 

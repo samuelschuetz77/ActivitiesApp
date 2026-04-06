@@ -154,7 +154,7 @@
                             <div class="card-image">
                                 @if (!string.IsNullOrEmpty(activity.ImageUrl))
                                 {
-                                    <img src="@activity.ImageUrl" alt="@activity.Name"
+                                    <img src="@activity.ImageUrl" alt="@activity.Name" loading="lazy"
                                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                     <div class="image-placeholder" style="display:none;">
                                         <span>@GetTagIcon(selectedTag)</span>
@@ -208,12 +208,28 @@
         new("Wellness & Beauty", "\u2728"),
         new("Education", "\ud83c\udf93"),
     ];
+    private const int HomeDiscoverRadiusMiles = 10;
+    private const double MetersPerMile = 1609.34;
 
     private List<Activity>? recentActivities;
+    private Dictionary<string, List<Activity>> cachedActivitiesByTag = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> backgroundWarmCompletedTags = new(StringComparer.OrdinalIgnoreCase);
     private List<Activity>? filteredActivities;
     private string? selectedTag;
     private bool isLoadingFiltered;
-    private int filterRequestVersion;
+    private int cacheGeneration;
+    private bool startupComplete;
+
+    // Render stability tracking — logs how many times the displayed list changes
+    private int renderCount;
+    private int dataChangedCount;
+    private int filteredListVersion;
+    private Dictionary<Guid, string?> lastRenderedImageUrls = new();
+
+    // Retry counter: when DataChanged fires and cached tags have empty results,
+    // retry up to N times (MAUI returns stale/empty cache, background refresh brings real data).
+    // Reset on location change so each new location gets fresh retries.
+    private int _emptyTagRetryCount;
 
     // Location popup
     private bool showLocationPopup;
@@ -234,42 +250,127 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        renderCount++;
+        if (renderCount <= 5 || renderCount % 10 == 0)
+        {
+            Logger.LogDebug("Home render #{RenderCount}: selectedTag={Tag}, filteredCount={FilteredCount}, dataChangedCount={DataChangedCount}, listVersion={ListVersion}",
+                renderCount, selectedTag ?? "<none>", filteredActivities?.Count ?? 0, dataChangedCount, filteredListVersion);
+        }
+
         if (firstRender)
         {
             Logger.LogInformation("Home first render complete");
             LocationService.LocationChanged += OnLocationChanged;
             ActivityService.DataChanged += OnDataChanged;
+
+            // Start location tracking
+            var locationSw = System.Diagnostics.Stopwatch.StartNew();
             LocationService.StartTracking();
 
+            // If location is already known (back-navigation, LocationService is scoped/singleton),
+            // skip the 2s wait. Only wait on a true cold start.
+            if (!hasActiveLocation)
+            {
+                var locationReady = new TaskCompletionSource<bool>();
+                void onFirstLocation()
+                {
+                    locationReady.TrySetResult(true);
+                }
+                LocationService.LocationChanged += onFirstLocation;
+                var winner = await Task.WhenAny(locationReady.Task, Task.Delay(2000));
+                LocationService.LocationChanged -= onFirstLocation;
+
+                Logger.LogInformation(
+                    "Home startup: cold start, location resolved={Resolved} in {Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
+                    winner == locationReady.Task, locationSw.ElapsedMilliseconds, hasActiveLocation, activeLat, activeLng);
+            }
+            else
+            {
+                Logger.LogInformation(
+                    "Home startup: location already known, skipping wait, lat={Lat}, lng={Lng}, elapsed={Ms}ms",
+                    activeLat, activeLng, locationSw.ElapsedMilliseconds);
+            }
+
             await LoadRecentlyViewed();
+            ResetTagCache("startup");
+            startupComplete = true;
+            Logger.LogInformation("Home startup complete: cachedTags={CachedCount}, hasLocation={HasLocation}, hasActiveLocation={HasActive}, recentlyViewedCount={RecentCount}",
+                cachedActivitiesByTag.Count, hasLocation, hasActiveLocation, recentActivities?.Count ?? 0);
+            _ = StartBackgroundWarmAsync("startup");
         }
     }
 
     private async void OnLocationChanged()
     {
+        if (!startupComplete)
+        {
+            Logger.LogInformation("Home OnLocationChanged skipped: startup not yet complete");
+            return;
+        }
+
         await InvokeAsync(async () =>
         {
+            Logger.LogInformation("Home OnLocationChanged: resetting cache, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
+                hasActiveLocation, activeLat, activeLng);
+            ResetTagCache("location_changed");
             if (selectedTag != null)
             {
-                await LoadFilteredActivities(selectedTag, "location_changed");
+                await EnsureTagLoadedAsync(selectedTag, "location_changed_selected_tag");
             }
+
+            _ = StartBackgroundWarmAsync("location_changed");
         });
     }
 
     private async void OnDataChanged()
     {
+        dataChangedCount++;
+
         await InvokeAsync(async () =>
         {
             await LoadRecentlyViewed();
 
-            if (selectedTag != null)
+            // Check if any cached tags returned empty results. This happens on MAUI after
+            // a location change: DiscoverActivitiesAsync returns empty from stale local cache,
+            // then background refresh brings real data and fires DataChanged. We retry those
+            // empty tags (up to 10 times total) so they pick up the fresh data.
+            var emptyTags = cachedActivitiesByTag
+                .Where(kvp => kvp.Value.Count == 0)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            if (emptyTags.Count > 0 && _emptyTagRetryCount < 10)
             {
-                await LoadFilteredActivities(selectedTag, "data_changed");
+                _emptyTagRetryCount++;
+                Logger.LogInformation(
+                    "Home OnDataChanged: retry #{Retry}, {EmptyCount} empty tags [{Tags}], selectedTag={SelectedTag}",
+                    _emptyTagRetryCount, emptyTags.Count, string.Join(", ", emptyTags), selectedTag ?? "<none>");
+
+                // Remove empty tags from cache so they get re-fetched
+                foreach (var tag in emptyTags)
+                {
+                    cachedActivitiesByTag.Remove(tag);
+                    backgroundWarmCompletedTags.Remove(tag);
+                }
+
+                // Re-fetch the selected tag immediately so the user sees results
+                if (selectedTag != null && emptyTags.Contains(selectedTag))
+                {
+                    await EnsureTagLoadedAsync(selectedTag, "data_changed_retry_empty", isUserInitiated: false);
+                }
+            }
+            else if (emptyTags.Count > 0)
+            {
+                Logger.LogWarning(
+                    "Home OnDataChanged: {EmptyCount} empty tags but retry limit reached ({Retry}), tags=[{Tags}]",
+                    emptyTags.Count, _emptyTagRetryCount, string.Join(", ", emptyTags));
             }
             else
             {
-                StateHasChanged();
+                Logger.LogDebug("Home OnDataChanged: count={Count}, no empty tags, refreshing recently viewed only", dataChangedCount);
             }
+
+            StateHasChanged();
         });
     }
 
@@ -313,75 +414,210 @@
         }
 
         selectedTag = tagName;
-        await LoadFilteredActivities(tagName, "tag_click");
+        var cacheHit = TryApplyCachedTagFilter();
+        Logger.LogInformation("Home tag selected: tag={Tag}, cacheHit={CacheHit}, cachedTagCount={CachedCount}",
+            tagName, cacheHit, cachedActivitiesByTag.Count);
+        if (!cacheHit)
+        {
+            await EnsureTagLoadedAsync(tagName, "tag_click_cache_miss");
+            return;
+        }
+
+        StateHasChanged();
     }
 
-    private async Task LoadFilteredActivities(string tagName, string trigger)
+    private void ResetTagCache(string trigger)
     {
-        var requestVersion = Interlocked.Increment(ref filterRequestVersion);
-        isLoadingFiltered = true;
+        var nextGeneration = Interlocked.Increment(ref cacheGeneration);
+        cachedActivitiesByTag = new(StringComparer.OrdinalIgnoreCase);
+        backgroundWarmCompletedTags = new(StringComparer.OrdinalIgnoreCase);
+        _emptyTagRetryCount = 0;
 
         Logger.LogInformation(
-            "Home tag load {RequestVersion} started: tag={Tag}, trigger={Trigger}, hasActiveLocation={HasActiveLocation}, activeLat={Lat}, activeLng={Lng}",
-            requestVersion, tagName, trigger, hasActiveLocation, activeLat, activeLng);
+            "Home cache reset: generation={Generation}, trigger={Trigger}, hasActiveLocation={HasActiveLocation}, activeLat={Lat}, activeLng={Lng}",
+            nextGeneration, trigger, hasActiveLocation, activeLat, activeLng);
+    }
 
-        await InvokeAsync(StateHasChanged);
+    private async Task StartBackgroundWarmAsync(string trigger)
+    {
+        var generation = cacheGeneration;
+        var warmSw = System.Diagnostics.Stopwatch.StartNew();
 
-        try
+        Logger.LogInformation("Home background warm started: generation={Generation}, trigger={Trigger}", generation, trigger);
+
+        foreach (var tag in tagCards)
         {
-            List<Activity> all;
-            if (hasActiveLocation)
+            if (generation != cacheGeneration)
             {
-                var radiusMeters = (int)(10 * 1609.34);
-                all = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
-            }
-            else
-            {
-                all = await ActivityService.ListActivitiesAsync();
-            }
-
-            var matchingActivities = all
-                .Where(a => GetTagList(a.Category).Contains(tagName))
-                .OrderBy(a => hasActiveLocation ? GetDistanceValue(a) : double.MaxValue)
-                .ThenByDescending(a => a.Rating)
-                .ToList();
-
-            if (requestVersion != filterRequestVersion)
-            {
-                Logger.LogWarning(
-                    "Home tag load {RequestVersion} ignored because a newer request {LatestRequestVersion} already exists",
-                    requestVersion, filterRequestVersion);
+                Logger.LogInformation("Home background warm stopped: stale generation={Generation}, currentGeneration={CurrentGeneration}", generation, cacheGeneration);
                 return;
             }
 
-            filteredActivities = matchingActivities;
+            if (backgroundWarmCompletedTags.Contains(tag.Name))
+            {
+                Logger.LogDebug("Home background warm skipping tag={Tag}, reason=already_completed", tag.Name);
+                continue;
+            }
 
-            Logger.LogInformation(
-                "Home tag load {RequestVersion} completed: tag={Tag}, fetched={FetchedCount}, matched={MatchedCount}",
-                requestVersion, tagName, all.Count, matchingActivities.Count);
+            await EnsureTagLoadedAsync(tag.Name, $"{trigger}_background", isUserInitiated: false);
+        }
 
-            if (matchingActivities.Count > 0)
+        Logger.LogInformation("Home background warm completed: generation={Generation}, trigger={Trigger}, cachedTags={CachedTagCount}, elapsed={Ms}ms",
+            generation, trigger, cachedActivitiesByTag.Count, warmSw.ElapsedMilliseconds);
+    }
+
+    private async Task EnsureTagLoadedAsync(string tagName, string trigger, bool isUserInitiated = true)
+    {
+        var generation = cacheGeneration;
+
+        if (cachedActivitiesByTag.ContainsKey(tagName))
+        {
+            Logger.LogInformation("Home tag load skipped: tag={Tag}, trigger={Trigger}, generation={Generation}, reason=cache_hit",
+                tagName, trigger, generation);
+            TryApplyCachedTagFilter();
+            StateHasChanged();
+            return;
+        }
+
+        if (isUserInitiated)
+        {
+            isLoadingFiltered = true;
+            Logger.LogInformation("Home loading state: isLoadingFiltered=true, tag={Tag}, trigger={Trigger}", tagName, trigger);
+            await InvokeAsync(StateHasChanged);
+        }
+
+        var loadSw = System.Diagnostics.Stopwatch.StartNew();
+        Logger.LogInformation(
+            "Home tag load started: tag={Tag}, trigger={Trigger}, generation={Generation}, hasActiveLocation={HasActiveLocation}, activeLat={Lat}, activeLng={Lng}",
+            tagName, trigger, generation, hasActiveLocation, activeLat, activeLng);
+
+        try
+        {
+            List<Activity> matchingActivities;
+
+            if (hasActiveLocation)
+            {
+                var radiusMeters = (int)(HomeDiscoverRadiusMiles * MetersPerMile);
+                var activities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
+                matchingActivities = activities
+                    .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(a => GetDistanceValue(a))
+                    .ThenByDescending(a => a.Rating)
+                    .ToList();
+            }
+            else
+            {
+                Logger.LogInformation("Home tag load: no active location, falling back to full list for tag={Tag}", tagName);
+                var allActivities = await ActivityService.ListActivitiesAsync();
+                matchingActivities = allActivities
+                    .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                    .OrderByDescending(a => a.Rating)
+                    .ToList();
+            }
+
+            if (generation != cacheGeneration)
+            {
+                Logger.LogWarning(
+                    "Home tag load discarded: tag={Tag}, trigger={Trigger}, staleGeneration={Generation}, currentGeneration={CurrentGeneration}, elapsed={Ms}ms",
+                    tagName, trigger, generation, cacheGeneration, loadSw.ElapsedMilliseconds);
+                return;
+            }
+
+            cachedActivitiesByTag[tagName] = matchingActivities;
+            backgroundWarmCompletedTags.Add(tagName);
+
+            var fastImages = matchingActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.Contains("/api/photos?r="));
+            var slowImages = matchingActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.Contains("/api/photos/place/"));
+
+            if (matchingActivities.Count == 0)
+            {
+                Logger.LogWarning(
+                    "Home tag load returned EMPTY: tag={Tag}, trigger={Trigger}, generation={Generation}, elapsed={Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
+                    tagName, trigger, generation, loadSw.ElapsedMilliseconds, hasActiveLocation, activeLat, activeLng);
+            }
+            else
             {
                 Logger.LogInformation(
-                    "Home tag load {RequestVersion} sample matches for {Tag}: {ActivityNames}",
-                    requestVersion,
+                    "Home tag load completed: tag={Tag}, trigger={Trigger}, generation={Generation}, count={Count}, withImages={ImageCount}, fastImages={Fast}, slowImages={Slow}, elapsed={Ms}ms, sampleImages={SampleImages}",
                     tagName,
-                    string.Join(" | ", matchingActivities.Take(8).Select(a => $"{a.Name} [{a.Category}]")));
+                    trigger,
+                    generation,
+                    matchingActivities.Count,
+                    matchingActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)),
+                    fastImages,
+                    slowImages,
+                    loadSw.ElapsedMilliseconds,
+                    string.Join(" | ", matchingActivities.Take(3).Select(a => a.ImageUrl ?? "<null>")));
             }
+
+            TryApplyCachedTagFilter();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Home tag load {RequestVersion} failed for tag {Tag}", requestVersion, tagName);
-            filteredActivities = [];
+            Logger.LogError(ex, "Home tag load failed: tag={Tag}, trigger={Trigger}, generation={Generation}, elapsed={Ms}ms",
+                tagName, trigger, generation, loadSw.ElapsedMilliseconds);
         }
         finally
         {
-            if (requestVersion == filterRequestVersion)
+            if (isUserInitiated && generation == cacheGeneration)
             {
                 isLoadingFiltered = false;
+                Logger.LogInformation("Home loading state: isLoadingFiltered=false, tag={Tag}, trigger={Trigger}", tagName, trigger);
                 StateHasChanged();
             }
         }
+    }
+
+    private bool TryApplyCachedTagFilter()
+    {
+        if (selectedTag == null)
+        {
+            filteredActivities = null;
+            return true;
+        }
+
+        if (!cachedActivitiesByTag.TryGetValue(selectedTag, out var cachedActivities))
+        {
+            Logger.LogWarning("Home tag cache miss for {Tag}", selectedTag);
+            filteredActivities = null;
+            return false;
+        }
+
+        filteredListVersion++;
+        var imageChanges = CountImageChanges(cachedActivities);
+        Logger.LogInformation(
+            "Home tag applied: tag={Tag}, count={Count}, withImages={ImageCount}, listVersion={Version}, imageChanges={ImageChanges}",
+            selectedTag,
+            cachedActivities.Count,
+            cachedActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)),
+            filteredListVersion,
+            imageChanges);
+        filteredActivities = cachedActivities;
+        return true;
+    }
+
+    private int CountImageChanges(List<Activity> activities)
+    {
+        var changes = 0;
+        var nextRendered = new Dictionary<Guid, string?>();
+
+        foreach (var a in activities)
+        {
+            nextRendered[a.Id] = a.ImageUrl;
+            if (lastRenderedImageUrls.TryGetValue(a.Id, out var prevUrl))
+            {
+                if (!string.Equals(prevUrl, a.ImageUrl, StringComparison.Ordinal))
+                {
+                    changes++;
+                    Logger.LogWarning(
+                        "Home image changed: activity={Id} ({Name}), prev={PrevUrl}, next={NextUrl}",
+                        a.Id, a.Name ?? "", prevUrl ?? "<null>", a.ImageUrl ?? "<null>");
+                }
+            }
+        }
+
+        lastRenderedImageUrls = nextRendered;
+        return changes;
     }
 
     private void ClearFilter()
@@ -497,12 +733,8 @@
             showLocationPopup = false;
             userAddress = lookup.FormattedAddress;
 
-            Logger.LogInformation("Home page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, activeLat, activeLng);
-
-            if (selectedTag != null)
-            {
-                await LoadFilteredActivities(selectedTag, "manual_location_apply");
-            }
+            Logger.LogInformation("Home manual location set: ZIP={Zip}, lat={Lat}, lng={Lng}, label={Label}",
+                input, activeLat, activeLng, lookup.FormattedAddress ?? "");
         }
         catch (Exception ex)
         {
@@ -515,11 +747,6 @@
     {
         LocationService.ClearManualLocation();
         showLocationPopup = false;
-
-        if (selectedTag != null)
-        {
-            await LoadFilteredActivities(selectedTag, "use_current_location");
-        }
     }
 
     public void Dispose()

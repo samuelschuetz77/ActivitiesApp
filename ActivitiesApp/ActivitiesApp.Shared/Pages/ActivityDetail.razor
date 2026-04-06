@@ -104,8 +104,8 @@
         }
     }
 
-    private void GoBack()
+    private async Task GoBack()
     {
-        Navigation.NavigateTo("/activities");
+        await JS.InvokeVoidAsync("history.back");
     }
 }
