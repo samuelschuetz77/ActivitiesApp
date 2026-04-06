@@ -33,7 +33,9 @@
       "WebSearch",
       "WebFetch(domain:developers.google.com)",
       "Bash(dotnet add:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(curl:*)",
+      "Bash(grep -E \"\\\\.\\(razor|cs\\)$\")"
     ]
   }
 }
