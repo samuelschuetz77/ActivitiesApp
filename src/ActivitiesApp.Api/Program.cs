@@ -250,6 +250,19 @@ app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 app.Logger.LogWarning("Test warning for observability");
 app.Logger.LogError("Test error for observability");
 
+
+
+app.MapDelete("/api/admin/purge-google-places", async (IActivityDbContext db, ILogger<Program> log) =>
+{
+    var googleActivities = await db.Activities.Where(a => a.PlaceId != null && a.PlaceId != "").ToListAsync();
+    var count = googleActivities.Count;
+    db.Activities.RemoveRange(googleActivities);
+    await db.SaveChangesAsync();
+    log.LogInformation("Purged {Count} Google-sourced activities", count);
+    return Results.Ok(new { deleted = count });
+});
+
+
 app.MapGet("/", () => $"ActivitiesApp gRPC API is running (v{appVersion}, db={dbProvider}). Use a gRPC client to communicate.");
 
 // Diagnostic endpoints

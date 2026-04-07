@@ -2,7 +2,7 @@ name: Kubernetes Build & Deploy
 
 on:
   push:
-    branches: [master, TEST-AND-REFACTOR]
+    branches: [master]
 
 env:
   DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
