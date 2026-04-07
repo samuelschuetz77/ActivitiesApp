@@ -10,11 +10,9 @@ env:
   WEB_IMAGE: ${{ secrets.DOCKER_USERNAME }}/activitiesapp-web
 
 jobs:
-  ci:
-    name: Build, Test & Push Images
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    outputs:
-      sha_tag: ${{ steps.tag.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,10 +28,33 @@ jobs:
       - name: Build Web
         run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
 
-      - name: Run unit tests
-        run: |
-          dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
-          dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
+  test:
+    name: Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Run API unit tests
+        run: dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
+
+      - name: Run Infrastructure unit tests
+        run: dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
+
+  push:
+    name: Push Images
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      sha_tag: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Compute SHA tag
         id: tag
@@ -57,10 +78,10 @@ jobs:
 
   cd:
     name: Deploy to Kubernetes
-    needs: ci
+    needs: push
     runs-on: self-hosted
     env:
-      SHA_TAG: ${{ needs.ci.outputs.sha_tag }}
+      SHA_TAG: ${{ needs.push.outputs.sha_tag }}
     steps:
       - uses: actions/checkout@v4
 
