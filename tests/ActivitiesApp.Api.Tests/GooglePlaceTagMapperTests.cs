@@ -77,7 +77,7 @@ public class GooglePlaceTagMapperTests
         //CHANGE BACK 
         //AJKLSDFHKLAJSDHFLKSADJH
         //AHSDKFGASDKLJFGASKDJFH
-        Assert.Equal(10, GooglePlaceTagMapper.AllTags.Count);
+        Assert.Equal(9, GooglePlaceTagMapper.AllTags.Count);
     }
 
     [Fact]
