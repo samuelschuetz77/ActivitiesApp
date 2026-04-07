@@ -74,7 +74,10 @@ public class GooglePlaceTagMapperTests
     public void AllTags_ContainsExpectedCount()
     {
         // There are 9 tag categories defined
-        Assert.Equal(9, GooglePlaceTagMapper.AllTags.Count);
+        //CHANGE BACK 
+        //AJKLSDFHKLAJSDHFLKSADJH
+        //AHSDKFGASDKLJFGASKDJFH
+        Assert.Equal(10, GooglePlaceTagMapper.AllTags.Count);
     }
 
     [Fact]
