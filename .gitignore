@@ -364,3 +364,11 @@ FodyWeavers.xsd
 
 # .NET SDK local tools/workload cache
 .dotnet/
+
+# Reference folders (separate projects, not part of this solution)
+ClaudeContextForOfflineCachingNotPartOFThisProjectDontMix/
+Kubernetes-reference-folder-seperate-project-dont-mix/
+
+# Build logs
+api_build.log
+k8s-backup/

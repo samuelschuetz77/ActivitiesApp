@@ -33,7 +33,15 @@
       "WebSearch",
       "WebFetch(domain:developers.google.com)",
       "Bash(dotnet add:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(git log:*)",
+      "Bash(xargs -I {} dirname {})",
+      "Bash(grep -E \"\\\\.\\(md|yaml|json|cs\\)$\")",
+      "Bash(git rm:*)",
+      "Bash(rm -rf k8s-backup/)",
+      "Bash(rm -f api_build.log)",
+      "Bash(git mv:*)",
+      "Bash(dotnet test:*)"
     ]
   }
 }

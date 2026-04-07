@@ -1,10 +1,14 @@
 <Solution>
-  <Project Path="ActivitiesApp.Api/ActivitiesApp.Api.csproj" />
-  <Project Path="ActivitiesApp.AppHost/ActivitiesApp.AppHost.csproj" />
-  <Project Path="ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj" />
-  <Project Path="ActivitiesApp/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj" />
-  <Project Path="ActivitiesApp/ActivitiesApp.Web/ActivitiesApp.Web.csproj" />
-  <Project Path="ActivitiesApp/ActivitiesApp/ActivitiesApp.csproj">
+  <Project Path="src/ActivitiesApp.Api/ActivitiesApp.Api.csproj" />
+  <Project Path="src/ActivitiesApp.AppHost/ActivitiesApp.AppHost.csproj" />
+  <Project Path="src/ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj" />
+  <Project Path="src/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj" />
+  <Project Path="src/ActivitiesApp.Web/ActivitiesApp.Web.csproj" />
+  <Project Path="src/ActivitiesApp.Maui/ActivitiesApp.csproj">
     <Deploy Solution="Debug|*" />
   </Project>
+  <Project Path="src/ActivitiesApp.Infrastructure/ActivitiesApp.Infrastructure.csproj" />
+  <Project Path="src/ActivitiesApp.Infrastructure.Migrations/ActivitiesApp.Infrastructure.Migrations.csproj" />
+  <Project Path="tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj" />
+  <Project Path="tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj" />
 </Solution>

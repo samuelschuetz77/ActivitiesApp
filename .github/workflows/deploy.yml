@@ -2,7 +2,7 @@ name: Kubernetes Build & Deploy
 
 on:
   push:
-    branches: [master]
+    branches: [master, TEST-AND-REFACTOR]
 
 env:
   DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
@@ -11,7 +11,7 @@ env:
 
 jobs:
   ci:
-    name: Build & Push Images
+    name: Build, Test & Push Images
     runs-on: ubuntu-latest
     outputs:
       sha_tag: ${{ steps.tag.outputs.sha }}
@@ -25,10 +25,15 @@ jobs:
           dotnet-quality: "preview"
 
       - name: Build API
-        run: dotnet build ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release
+        run: dotnet build src/ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release
 
       - name: Build Web
-        run: dotnet build ActivitiesApp/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
+        run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
+
+      - name: Run unit tests
+        run: |
+          dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
 
       - name: Compute SHA tag
         id: tag
@@ -42,12 +47,12 @@ jobs:
 
       - name: Build & push API image
         run: |
-          docker build -f ActivitiesApp.Api/Dockerfile -t ${{ env.API_IMAGE }}:${{ steps.tag.outputs.sha }} .
+          docker build -f src/ActivitiesApp.Api/Dockerfile -t ${{ env.API_IMAGE }}:${{ steps.tag.outputs.sha }} .
           docker push ${{ env.API_IMAGE }}:${{ steps.tag.outputs.sha }}
 
       - name: Build & push Web image
         run: |
-          docker build -f ActivitiesApp/ActivitiesApp.Web/Dockerfile -t ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.sha }} .
+          docker build -f src/ActivitiesApp.Web/Dockerfile -t ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.sha }} .
           docker push ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.sha }}
 
   cd:
@@ -66,7 +71,7 @@ jobs:
         run: kubectl get nodes
 
       - name: Apply namespace
-        run: kubectl apply -f k8s/namespace.yaml
+        run: kubectl apply -f deploy/k8s/base/namespace.yaml
 
       - name: Create/update secrets
         run: |
@@ -80,7 +85,10 @@ jobs:
 
       - name: Apply manifests
         run: |
-          kubectl apply -f k8s
+          kubectl apply -f deploy/k8s/base
+          kubectl apply -f deploy/k8s/data
+          kubectl apply -f deploy/k8s/app
+          kubectl apply -f deploy/k8s/observability
 
       - name: Restart Grafana to pick up ConfigMap changes
         run: kubectl rollout restart deployment/grafana --namespace=activitiesapp
