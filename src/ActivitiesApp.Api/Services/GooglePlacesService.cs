@@ -9,10 +9,15 @@ namespace ActivitiesApp.Api.Services;
 
 public class GooglePlacesService
 {
+    private static readonly Meter GoogleApiMeter = new("ActivitiesApp.GoogleApi");
+    private static readonly Counter<long> RequestCounter = GoogleApiMeter.CreateCounter<long>(
+        "google_api_requests_total",
+        unit: "{request}",
+        description: "Total Google API requests by type");
+
     private readonly HttpClient _http;
     private readonly string _apiKey;
     private readonly ILogger<GooglePlacesService> _logger;
-    private readonly Counter<long> _requestCounter;
     private readonly IActivityDbContext _db;
 
     public static readonly Dictionary<string, int> QuotaLimits = new()
@@ -33,7 +38,6 @@ public class GooglePlacesService
         HttpClient http,
         IConfiguration config,
         ILogger<GooglePlacesService> logger,
-        IMeterFactory meterFactory,
         IActivityDbContext db)
     {
         _http = http;
@@ -41,17 +45,11 @@ public class GooglePlacesService
             ?? throw new InvalidOperationException("GoogleMaps:ApiKey is not configured.");
         _logger = logger;
         _db = db;
-
-        var meter = meterFactory.Create("ActivitiesApp.GoogleApi");
-        _requestCounter = meter.CreateCounter<long>(
-            "google_api_requests_total",
-            unit: "{request}",
-            description: "Total Google API requests by type");
     }
 
     private async Task TrackRequestAsync(string apiType, CancellationToken cancellationToken = default)
     {
-        _requestCounter.Add(1, new KeyValuePair<string, object?>("api_type", apiType));
+        RequestCounter.Add(1, new KeyValuePair<string, object?>("api_type", apiType));
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var id = $"{today:yyyy-MM-dd}:{apiType}";
