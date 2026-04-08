@@ -186,7 +186,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
                     existing.Longitude = place.Longitude;
                     existing.ImageUrl = !string.IsNullOrWhiteSpace(place.PhotoUrl)
                         ? place.PhotoUrl
-                        : $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
+                        : "";
                     updatedActivities.Add(existing);
 
                     _logger.LogInformation(
@@ -214,7 +214,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
                     Category = category, // TODO: comma-separated tags, migrate to proper Tags field
                     ImageUrl = !string.IsNullOrWhiteSpace(place.PhotoUrl)
                         ? place.PhotoUrl
-                        : $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400",
+                        : "",
                     PlaceId = place.PlaceId,
                     Rating = place.Rating
                 };

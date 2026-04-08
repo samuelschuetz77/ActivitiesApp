@@ -635,25 +635,13 @@ app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, 
         entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{cacheKey.GetHashCode():x}\""));
 });
 
-// Ensures ImageUrl uses the place-based endpoint (never expires) when a PlaceId is available
+// Ensures ImageUrl uses the fast photo proxy (never calls Place Details)
 void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
 {
-    if (!string.IsNullOrEmpty(activity.ImageUrl) &&
-        (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")))
-    {
-        return;
-    }
-
-    // If we have a PlaceId, always use the place-based endpoint
-    if (!string.IsNullOrEmpty(activity.PlaceId))
-    {
-        activity.ImageUrl = $"/api/photos/place/{Uri.EscapeDataString(activity.PlaceId)}?maxwidth=400";
-        return;
-    }
     if (string.IsNullOrEmpty(activity.ImageUrl)) return;
-    // Already a valid URL
+    // Already a valid proxy or external URL — leave it alone
     if (activity.ImageUrl.StartsWith("/api/photos") || activity.ImageUrl.StartsWith("http")) return;
-    // Raw Google photo reference — convert to proxy URL (legacy fallback)
+    // Raw Google photo reference — convert to fast proxy URL (no Place Details call needed)
     activity.ImageUrl = $"/api/photos?r={Uri.EscapeDataString(activity.ImageUrl)}&maxwidth=400";
 }
 
@@ -700,12 +688,15 @@ static bool ApplyGooglePlaceData(
 
 static string GetPreferredPlaceImageUrl(GooglePlacesService.NearbyPlace place)
 {
+    // Only use the fast photo reference URL — never fall back to /api/photos/place/
+    // which calls Place Details ($0.017 per call)
     if (!string.IsNullOrWhiteSpace(place.PhotoUrl))
     {
         return place.PhotoUrl;
     }
 
-    return $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
+    // No photo available from Nearby Search — return empty rather than triggering Place Details
+    return "";
 }
 
 static double HaversineMeters(double lat1, double lng1, double lat2, double lng2)
