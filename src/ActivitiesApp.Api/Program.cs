@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -128,6 +129,18 @@ builder.Services.AddAuthorization();
 
 // Register Google Places service with HttpClient
 builder.Services.AddHttpClient<GooglePlacesService>();
+
+// Background service that publishes quota metrics to Prometheus via OTEL
+builder.Services.AddHostedService<QuotaMetricsService>();
+
+// Named HttpClient for fetching quota status from Azure API
+builder.Services.AddHttpClient("AzureApi", client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["AzureApiAddress"]
+        ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 var app = builder.Build();
 
@@ -284,6 +297,68 @@ app.MapGet("/api/quota/status", () =>
         photos = status["photo"],
         geocoding = status["geocode"],
         resetTime = DateTime.UtcNow.Date.AddDays(1)
+    });
+});
+
+app.MapGet("/api/quota/aggregate", async (IHttpClientFactory httpFactory, ILogger<Program> log) =>
+{
+    var localStatus = GooglePlacesService.GetQuotaStatus();
+
+    // Fetch remote Azure API quota status
+    Dictionary<string, GooglePlacesService.QuotaStatus>? remoteStatus = null;
+    var remoteError = "";
+    try
+    {
+        var client = httpFactory.CreateClient("AzureApi");
+        var response = await client.GetAsync("/api/quota/status");
+        if (response.IsSuccessStatusCode)
+        {
+            var remote = await response.Content.ReadFromJsonAsync<JsonElement>();
+            remoteStatus = new Dictionary<string, GooglePlacesService.QuotaStatus>
+            {
+                ["nearby_search"] = new(remote.GetProperty("nearbySearch").GetProperty("used").GetInt32(),
+                                       remote.GetProperty("nearbySearch").GetProperty("limit").GetInt32()),
+                ["place_details"] = new(remote.GetProperty("placeDetails").GetProperty("used").GetInt32(),
+                                       remote.GetProperty("placeDetails").GetProperty("limit").GetInt32()),
+                ["photo"] = new(remote.GetProperty("photos").GetProperty("used").GetInt32(),
+                               remote.GetProperty("photos").GetProperty("limit").GetInt32()),
+                ["geocode"] = new(remote.GetProperty("geocoding").GetProperty("used").GetInt32(),
+                                 remote.GetProperty("geocoding").GetProperty("limit").GetInt32())
+            };
+        }
+        else
+        {
+            remoteError = $"HTTP {(int)response.StatusCode}";
+        }
+    }
+    catch (Exception ex)
+    {
+        remoteError = ex.Message;
+        log.LogWarning(ex, "Failed to fetch remote quota status");
+    }
+
+    object MakeEntry(string apiType, string label)
+    {
+        var local = localStatus[apiType];
+        var remote = remoteStatus?[apiType];
+        var combinedUsed = local.Used + (remote?.Used ?? 0);
+        var limit = local.Limit;
+        return new
+        {
+            local = new { local.Used, local.Limit },
+            azure = remote != null ? new { remote.Used, remote.Limit } : null,
+            combined = new { used = combinedUsed, limit, percentage = limit > 0 ? Math.Round((double)combinedUsed / limit * 100, 1) : 0 }
+        };
+    }
+
+    return Results.Ok(new
+    {
+        nearbySearch = MakeEntry("nearby_search", "Nearby Search"),
+        placeDetails = MakeEntry("place_details", "Place Details"),
+        photos = MakeEntry("photo", "Photos"),
+        geocoding = MakeEntry("geocode", "Geocoding"),
+        resetTime = DateTime.UtcNow.Date.AddDays(1),
+        azureStatus = string.IsNullOrEmpty(remoteError) ? "connected" : $"error: {remoteError}"
     });
 });
 
