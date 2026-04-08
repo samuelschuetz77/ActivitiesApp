@@ -67,8 +67,8 @@ public class ActivityRestClient : IActivityService
     {
         var cacheKey = tagName ?? "__all__";
 
-        // Invalidate cache if location moved significantly (~100m)
-        if (Math.Abs(lat - _cachedLat) > 0.001 || Math.Abs(lng - _cachedLng) > 0.001)
+        // Invalidate cache if location moved significantly (~500m)
+        if (Math.Abs(lat - _cachedLat) > 0.005 || Math.Abs(lng - _cachedLng) > 0.005)
         {
             _logger.LogInformation("REST DiscoverCache invalidated: location moved from ({OldLat},{OldLng}) to ({NewLat},{NewLng}), clearing {Count} cached tags",
                 _cachedLat, _cachedLng, lat, lng, _discoverCache.Count);
@@ -191,6 +191,19 @@ public class ActivityRestClient : IActivityService
 
         activity.ImageUrl = ImageUrlResolver.Resolve(activity.ImageUrl, _apiBaseAddress);
         return activity;
+    }
+
+    public async Task<QuotaStatusResponse?> GetQuotaStatusAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<QuotaStatusResponse>("/api/quota/status");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch quota status");
+            return null;
+        }
     }
 
     private record ReverseGeocodeResult(string FormattedAddress);

@@ -48,3 +48,19 @@ public class PlaceReviewData
     public string Text { get; set; } = "";
     public string RelativeTime { get; set; } = "";
 }
+
+public class QuotaStatusResponse
+{
+    public QuotaItem NearbySearch { get; set; } = new();
+    public QuotaItem PlaceDetails { get; set; } = new();
+    public QuotaItem Photos { get; set; } = new();
+    public QuotaItem Geocoding { get; set; } = new();
+    public DateTime ResetTime { get; set; }
+}
+
+public class QuotaItem
+{
+    public int Used { get; set; }
+    public int Limit { get; set; }
+    public double Percentage => Limit > 0 ? (double)Used / Limit * 100 : 0;
+}

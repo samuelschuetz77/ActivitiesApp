@@ -262,6 +262,120 @@
       ],
       "title": "Near Real-Time Logs",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "unit": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "nearby_search" },
+            "properties": [{ "id": "max", "value": 50 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "place_details" },
+            "properties": [{ "id": "max", "value": 50 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "photo" },
+            "properties": [{ "id": "max", "value": 100 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "geocode" },
+            "properties": [{ "id": "max", "value": 100 }]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "id": 7,
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (api_type) (increase(google_api_requests_total{service_name=\"activitiesapp-api\"}[24h]))",
+          "legendFormat": "{{api_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Google API Daily Quota Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps",
+          "fillOpacity": 20
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (api_type) (rate(google_api_requests_total{service_name=\"activitiesapp-api\"}[5m]))",
+          "legendFormat": "{{api_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Google API Requests Over Time",
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",

@@ -21,36 +21,42 @@ public static class GooglePlaceTagMapper
             new(
                 "Food & Drink",
                 "utensils",
+                "restaurant",
                 new HashSet<string> { "restaurant", "cafe", "bakery", "bar", "meal_takeaway" },
                 new HashSet<string> { "restaurant", "cafe", "bakery", "bar", "meal_delivery", "meal_takeaway", "liquor_store", "food" }),
 
             new(
                 "Outdoors",
                 "tree",
+                "park",
                 new HashSet<string> { "park", "campground", "rv_park", "zoo" },
                 new HashSet<string> { "park", "campground", "rv_park", "zoo", "natural_feature" }),
 
             new(
                 "Arts & Culture",
                 "palette",
+                "museum",
                 new HashSet<string> { "art_gallery", "museum", "library", "movie_theater" },
                 new HashSet<string> { "art_gallery", "museum", "library", "movie_theater" }),
 
             new(
                 "Nightlife",
                 "moon",
+                "night_club",
                 new HashSet<string> { "night_club", "bar", "casino" },
                 new HashSet<string> { "night_club", "bar", "casino" }),
 
             new(
                 "Fitness & Sports",
                 "dumbbell",
+                "gym",
                 new HashSet<string> { "gym", "stadium", "bowling_alley" },
                 new HashSet<string> { "gym", "stadium", "bowling_alley" }),
 
             new(
                 "Shopping",
                 "shopping-bag",
+                "shopping_mall",
                 new HashSet<string> { "shopping_mall", "clothing_store", "book_store", "electronics_store", "supermarket", "department_store" },
                 new HashSet<string>
                 {
@@ -63,18 +69,21 @@ public static class GooglePlaceTagMapper
             new(
                 "Wellness & Beauty",
                 "sparkle",
+                "spa",
                 new HashSet<string> { "spa", "beauty_salon", "hair_care" },
                 new HashSet<string> { "spa", "beauty_salon", "hair_care" }),
 
             new(
                 "Attractions",
                 "star",
+                "tourist_attraction",
                 new HashSet<string> { "amusement_park", "aquarium", "tourist_attraction", "zoo", "movie_theater", "bowling_alley", "casino" },
                 new HashSet<string> { "amusement_park", "aquarium", "tourist_attraction", "zoo", "movie_theater", "bowling_alley", "casino" }),
 
             new(
                 "Education",
                 "graduation-cap",
+                "library",
                 new HashSet<string> { "library", "museum", "university", "school", "book_store" },
                 new HashSet<string> { "library", "museum", "university", "school", "primary_school", "secondary_school", "book_store" }),
         };
@@ -127,5 +136,6 @@ public static class GooglePlaceTagMapper
 public record TagDefinition(
     string Name,
     string IconKey,
+    string PrimarySearchType,
     IReadOnlySet<string> SearchTypes,
     IReadOnlySet<string> GoogleTypes);

@@ -274,6 +274,19 @@ app.MapGet("/api/version", () => Results.Ok(new
     timestamp = DateTimeOffset.UtcNow
 }));
 
+app.MapGet("/api/quota/status", () =>
+{
+    var status = GooglePlacesService.GetQuotaStatus();
+    return Results.Ok(new
+    {
+        nearbySearch = status["nearby_search"],
+        placeDetails = status["place_details"],
+        photos = status["photo"],
+        geocoding = status["geocode"],
+        resetTime = DateTime.UtcNow.Date.AddDays(1)
+    });
+});
+
 app.MapGet("/api/health/db", async (IServiceProvider sp) =>
 {
     try
@@ -352,19 +365,58 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
 }).RequireAuthorization();
 
 app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName,
-    IActivityDbContext db, GooglePlacesService places, ILogger<Program> log) =>
+    IActivityDbContext db, GooglePlacesService places, IMemoryCache discoverCache, ILogger<Program> log) =>
 {
     var radius = radiusMeters ?? 16093;
     var discoverRequestId = Guid.NewGuid().ToString("N")[..8];
     log.LogInformation("REST Discover {RequestId} started at ({Lat},{Lng}) radius={Radius}m tag={Tag}", discoverRequestId, lat, lng, radius, tagName ?? "");
 
+    // Server-side cache: quantize to ~1.1km grid to avoid redundant Google calls
+    var gridLat = Math.Round(lat, 2);
+    var gridLng = Math.Round(lng, 2);
+    var discoverCacheKey = $"discover:{gridLat}:{gridLng}:{radius}";
+
     List<GooglePlacesService.NearbyPlace> googlePlaces;
     try
     {
-        googlePlaces = string.IsNullOrWhiteSpace(tagName)
-            ? await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: "fun things to do")
-            : await SearchPlacesForTagAsync(lat, lng, radius, tagName, places, log);
-        log.LogInformation("REST Discover {RequestId} got {Count} Google places", discoverRequestId, googlePlaces.Count);
+        // Check server-side cache first
+        if (discoverCache.TryGetValue(discoverCacheKey, out List<GooglePlacesService.NearbyPlace>? cachedPlaces) && cachedPlaces != null)
+        {
+            googlePlaces = cachedPlaces;
+            log.LogInformation("REST Discover {RequestId} cache HIT: {Count} places from grid ({GridLat},{GridLng})",
+                discoverRequestId, googlePlaces.Count, gridLat, gridLng);
+        }
+        else
+        {
+            // Single broad search (no type filter) to minimize API calls
+            googlePlaces = await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: null);
+            discoverCache.Set(discoverCacheKey, googlePlaces, TimeSpan.FromMinutes(60));
+            log.LogInformation("REST Discover {RequestId} cache MISS: broad search returned {Count} places, cached for 60min",
+                discoverRequestId, googlePlaces.Count);
+        }
+
+        // If a tag was requested and fewer than 5 results match, do 1 targeted search
+        if (!string.IsNullOrWhiteSpace(tagName) &&
+            GooglePlaceTagMapper.TryGetDefinition(tagName, out var tagDef) && tagDef != null)
+        {
+            var matchCount = googlePlaces.Count(p => GooglePlaceTagMapper.GetTags(p.Types)
+                .Contains(tagName, StringComparer.OrdinalIgnoreCase));
+            if (matchCount < 5)
+            {
+                log.LogInformation("REST Discover {RequestId} only {MatchCount} matches for tag {Tag}, doing targeted search with type={Type}",
+                    discoverRequestId, matchCount, tagName, tagDef.PrimarySearchType);
+                var targeted = await places.SearchNearbyAsync(lat, lng, radius, type: tagDef.PrimarySearchType, keyword: null);
+                // Merge and deduplicate by PlaceId
+                var deduped = googlePlaces.ToDictionary(p => p.PlaceId, p => p, StringComparer.Ordinal);
+                foreach (var p in targeted)
+                {
+                    if (!string.IsNullOrWhiteSpace(p.PlaceId))
+                        deduped.TryAdd(p.PlaceId, p);
+                }
+                googlePlaces = deduped.Values.ToList();
+                log.LogInformation("REST Discover {RequestId} after targeted merge: {Count} places", discoverRequestId, googlePlaces.Count);
+            }
+        }
     }
     catch (Exception ex)
     {
@@ -448,100 +500,22 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
         }
     }
 
+    // Sort by distance (closest first) and cap at 30 results
+    results = results
+        .OrderBy(a => HaversineMeters(lat, lng, a.Latitude, a.Longitude))
+        .Take(30)
+        .ToList();
+
     var fastCount = results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos?r="));
     var slowCount = results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos/place/"));
     var noneCount = results.Count(a => string.IsNullOrWhiteSpace(a.ImageUrl));
 
     log.LogInformation(
-        "REST Discover {RequestId} returning {Count} activities with {NewCount} new and {UpdatedCount} updated existing rows, withImages={ImageCount}, imagePaths: fast={Fast}, slow={Slow}, none={None}",
+        "REST Discover {RequestId} returning {Count} activities (capped at 30, sorted by distance) with {NewCount} new and {UpdatedCount} updated existing rows, withImages={ImageCount}, imagePaths: fast={Fast}, slow={Slow}, none={None}",
         discoverRequestId, results.Count, newActivities.Count, updatedExistingCount,
         results.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)), fastCount, slowCount, noneCount);
 
-    // Pre-warm photo cache in background so images load instantly on the client
-    var memCache = app.Services.GetRequiredService<IMemoryCache>();
-    var fastUrlsToWarm = results
-        .Where(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos?r="))
-        .Select(a => a.ImageUrl!)
-        .Distinct()
-        .ToList();
-    var placeUrlsToWarm = results
-        .Where(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.StartsWith("/api/photos/place/"))
-        .Select(a => a.ImageUrl!)
-        .Distinct()
-        .ToList();
-    var capturedRequestId = discoverRequestId;
-
-    _ = Task.Run(async () =>
-    {
-        var photoSw = System.Diagnostics.Stopwatch.StartNew();
-        var warmed = 0;
-        using var scope = app.Services.CreateScope();
-        var bgPlaces = scope.ServiceProvider.GetRequiredService<GooglePlacesService>();
-        var bgLog = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-        // Pre-warm fast-path URLs (/api/photos?r={ref})
-        foreach (var url in fastUrlsToWarm)
-        {
-            try
-            {
-                var qs = System.Web.HttpUtility.ParseQueryString(url.Split('?').Last());
-                var photoRef = qs["r"];
-                var maxW = int.TryParse(qs["maxwidth"], out var w) ? w : 400;
-                if (!string.IsNullOrEmpty(photoRef))
-                {
-                    var ck = $"photo_ref:{photoRef}:{maxW}";
-                    if (!memCache.TryGetValue(ck, out byte[]? _))
-                    {
-                        var bytes = await bgPlaces.FetchPhotoAsync(photoRef, maxW);
-                        if (bytes != null)
-                        {
-                            memCache.Set(ck, bytes, TimeSpan.FromHours(24));
-                            warmed++;
-                        }
-                    }
-                }
-            }
-            catch { /* best-effort pre-warm */ }
-        }
-
-        // Pre-warm slow-path URLs (/api/photos/place/{placeId})
-        foreach (var url in placeUrlsToWarm)
-        {
-            try
-            {
-                // Extract placeId from URL like /api/photos/place/{placeId}?maxwidth=400
-                var pathPart = url.Split('?')[0];
-                var placeId = pathPart.Split('/').Last();
-                var qs = System.Web.HttpUtility.ParseQueryString(url.Contains('?') ? url.Split('?').Last() : "");
-                var maxW = int.TryParse(qs["maxwidth"], out var w) ? w : 400;
-
-                var ck = $"photo_place:{placeId}:{maxW}";
-                if (!memCache.TryGetValue(ck, out byte[]? _))
-                {
-                    var details = await bgPlaces.GetPlaceDetailsAsync(placeId);
-                    var photoUrl = details?.PhotoUrls?.FirstOrDefault();
-                    if (photoUrl != null)
-                    {
-                        var refQs = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
-                        var photoRef = refQs["r"];
-                        if (!string.IsNullOrEmpty(photoRef))
-                        {
-                            var bytes = await bgPlaces.FetchPhotoAsync(photoRef, maxW);
-                            if (bytes != null)
-                            {
-                                memCache.Set(ck, bytes, TimeSpan.FromHours(24));
-                                warmed++;
-                            }
-                        }
-                    }
-                }
-            }
-            catch { /* best-effort pre-warm */ }
-        }
-
-        bgLog.LogInformation("REST Discover {RequestId} photo pre-warm: {Warmed}/{Total} photos ({FastUrls} fast + {PlaceUrls} place) in {Ms}ms",
-            capturedRequestId, warmed, fastUrlsToWarm.Count + placeUrlsToWarm.Count, fastUrlsToWarm.Count, placeUrlsToWarm.Count, photoSw.ElapsedMilliseconds);
-    });
+    // Photo pre-warm removed to reduce Google API costs — photos load lazily with 24h cache
 
     return Results.Ok(results);
 });
@@ -622,18 +596,32 @@ app.MapGet("/api/photos/place/{placeId}", async (string placeId, int? maxwidth, 
 
     log.LogInformation("Photo place cache miss: placeId={PlaceId}, width={Width}", placeId, width);
 
-    // Get fresh photo reference from Google Place Details
-    var details = await places.GetPlaceDetailsAsync(placeId);
-    var photoUrl = details?.PhotoUrls?.FirstOrDefault();
-    if (photoUrl is null)
+    // Cache the photo reference separately to avoid calling Place Details on every request
+    var photoRefCacheKey = $"photoref:{placeId}";
+    string? photoRef;
+    if (cache.TryGetValue(photoRefCacheKey, out string? cachedRef) && cachedRef != null)
     {
-        log.LogWarning("Photo place no photos: placeId={PlaceId}", placeId);
-        return Results.NotFound();
+        photoRef = cachedRef;
+        log.LogDebug("Photo ref cache hit: placeId={PlaceId}", placeId);
+    }
+    else
+    {
+        var details = await places.GetPlaceDetailsAsync(placeId);
+        var photoUrl = details?.PhotoUrls?.FirstOrDefault();
+        if (photoUrl is null)
+        {
+            log.LogWarning("Photo place no photos: placeId={PlaceId}", placeId);
+            return Results.NotFound();
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
+        photoRef = query["r"];
+        if (!string.IsNullOrEmpty(photoRef))
+        {
+            cache.Set(photoRefCacheKey, photoRef, TimeSpan.FromHours(24));
+        }
     }
 
-    // photoUrl is "/api/photos?r={ref}&maxwidth=800" — extract the reference
-    var query = System.Web.HttpUtility.ParseQueryString(photoUrl.Split('?').LastOrDefault() ?? "");
-    var photoRef = query["r"];
     if (string.IsNullOrEmpty(photoRef))
         return Results.NotFound();
 
@@ -720,64 +708,15 @@ static string GetPreferredPlaceImageUrl(GooglePlacesService.NearbyPlace place)
     return $"/api/photos/place/{Uri.EscapeDataString(place.PlaceId)}?maxwidth=400";
 }
 
-static async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync(
-    double latitude,
-    double longitude,
-    int radiusMeters,
-    string tagName,
-    GooglePlacesService places,
-    ILogger log)
+static double HaversineMeters(double lat1, double lng1, double lat2, double lng2)
 {
-    if (!GooglePlaceTagMapper.TryGetDefinition(tagName, out var tagDefinition) || tagDefinition is null)
-    {
-        log.LogWarning("REST Discover requested unknown tag {Tag}; falling back to generic search", tagName);
-        return await places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: null, keyword: "fun things to do");
-    }
-
-    var deduped = new Dictionary<string, GooglePlacesService.NearbyPlace>(StringComparer.Ordinal);
-
-    foreach (var googleType in tagDefinition.SearchTypes)
-    {
-        try
-        {
-            var placesForType = await places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: googleType, keyword: null);
-            log.LogInformation(
-                "REST Discover tag {Tag} for Google type {GoogleType} returned {Count} places",
-                tagName, googleType, placesForType.Count);
-
-            if (placesForType.Count > 0)
-            {
-                log.LogInformation(
-                    "REST Discover tag {Tag} type {GoogleType} sample places: {PlaceNames}",
-                    tagName,
-                    googleType,
-                    string.Join(" | ", placesForType.Take(5).Select(p => p.Name)));
-            }
-
-            foreach (var place in placesForType)
-            {
-                if (!string.IsNullOrWhiteSpace(place.PlaceId))
-                {
-                    deduped[place.PlaceId] = place;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            log.LogWarning(ex, "REST Discover tag {Tag} failed for Google type {GoogleType}", tagName, googleType);
-        }
-    }
-
-    log.LogInformation("REST Discover tag {Tag} deduped to {Count} places", tagName, deduped.Count);
-    if (deduped.Count > 0)
-    {
-        log.LogInformation(
-            "REST Discover tag {Tag} deduped sample: {PlaceNames}",
-            tagName,
-            string.Join(" | ", deduped.Values.Take(8).Select(p => $"{p.Name} [{string.Join("/", p.Types.Take(3))}]")));
-    }
-
-    return deduped.Values.ToList();
+    const double R = 6371000;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+            Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+            Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+    return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 }
 
 static List<string> ValidateActivityForCreate(ActivitiesApp.Infrastructure.Models.Activity activity)

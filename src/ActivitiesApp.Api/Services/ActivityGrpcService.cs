@@ -100,12 +100,33 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         List<GooglePlacesService.NearbyPlace> places;
         try
         {
-            places = string.IsNullOrWhiteSpace(request.TagName)
-                ? await _places.SearchNearbyAsync(
-                    request.Latitude, request.Longitude, request.RadiusMeters,
-                    type: null, keyword: "fun things to do")
-                : await SearchPlacesForTagAsync(
-                    request.Latitude, request.Longitude, request.RadiusMeters, request.TagName);
+            // Single broad search to minimize API calls
+            places = await _places.SearchNearbyAsync(
+                request.Latitude, request.Longitude, request.RadiusMeters,
+                type: null, keyword: null);
+
+            // If a tag was requested and fewer than 5 results match, do 1 targeted search
+            if (!string.IsNullOrWhiteSpace(request.TagName) &&
+                GooglePlaceTagMapper.TryGetDefinition(request.TagName, out var tagDef) && tagDef != null)
+            {
+                var matchCount = places.Count(p => GooglePlaceTagMapper.GetTags(p.Types)
+                    .Contains(request.TagName, StringComparer.OrdinalIgnoreCase));
+                if (matchCount < 5)
+                {
+                    _logger.LogInformation("DiscoverActivities only {MatchCount} matches for tag {Tag}, doing targeted search with type={Type}",
+                        matchCount, request.TagName, tagDef.PrimarySearchType);
+                    var targeted = await _places.SearchNearbyAsync(
+                        request.Latitude, request.Longitude, request.RadiusMeters,
+                        type: tagDef.PrimarySearchType, keyword: null);
+                    var deduped = places.ToDictionary(p => p.PlaceId, p => p, StringComparer.Ordinal);
+                    foreach (var p in targeted)
+                    {
+                        if (!string.IsNullOrWhiteSpace(p.PlaceId))
+                            deduped.TryAdd(p.PlaceId, p);
+                    }
+                    places = deduped.Values.ToList();
+                }
+            }
 
             _logger.LogInformation("DiscoverActivities received {Count} Google places", places.Count);
         }
@@ -236,65 +257,6 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         _logger.LogInformation(
             "DiscoverActivities finished. Streamed {ExistingCount} existing, {NewCount} new, skipped {SkippedCount} unmapped, GooglePlaceCount={GooglePlaceCount}",
             streamedExistingCount, streamedNewCount, skippedUnmappedCount, places.Count);
-    }
-
-    private async Task<List<GooglePlacesService.NearbyPlace>> SearchPlacesForTagAsync(
-        double latitude, double longitude, int radiusMeters, string tagName)
-    {
-        if (!GooglePlaceTagMapper.TryGetDefinition(tagName, out var tagDefinition) || tagDefinition is null)
-        {
-            _logger.LogWarning("DiscoverActivities requested unknown tag {Tag}; falling back to generic search", tagName);
-            return await _places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: null, keyword: "fun things to do");
-        }
-
-        var deduped = new Dictionary<string, GooglePlacesService.NearbyPlace>(StringComparer.Ordinal);
-
-        _logger.LogInformation(
-            "Starting tag-specific Google search for {Tag} using types [{Types}]",
-            tagName, string.Join(",", tagDefinition.SearchTypes));
-
-        foreach (var googleType in tagDefinition.SearchTypes)
-        {
-            try
-            {
-                var places = await _places.SearchNearbyAsync(latitude, longitude, radiusMeters, type: googleType, keyword: null);
-                _logger.LogInformation(
-                    "Tag search {Tag} for Google type {GoogleType} returned {Count} places",
-                    tagName, googleType, places.Count);
-
-                if (places.Count > 0)
-                {
-                    _logger.LogInformation(
-                        "Tag search {Tag} type {GoogleType} sample places: {PlaceNames}",
-                        tagName,
-                        googleType,
-                        string.Join(" | ", places.Take(5).Select(p => p.Name)));
-                }
-
-                foreach (var place in places)
-                {
-                    if (!string.IsNullOrWhiteSpace(place.PlaceId))
-                    {
-                        deduped[place.PlaceId] = place;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Tag search {Tag} failed for Google type {GoogleType}", tagName, googleType);
-            }
-        }
-
-        _logger.LogInformation("Tag-specific Google search for {Tag} deduped to {Count} places", tagName, deduped.Count);
-        if (deduped.Count > 0)
-        {
-            _logger.LogInformation(
-                "Tag-specific Google search for {Tag} deduped sample: {PlaceNames}",
-                tagName,
-                string.Join(" | ", deduped.Values.Take(8).Select(p => $"{p.Name} [{string.Join("/", p.Types.Take(3))}]")));
-        }
-
-        return deduped.Values.ToList();
     }
 
     // ─── Google Maps ───

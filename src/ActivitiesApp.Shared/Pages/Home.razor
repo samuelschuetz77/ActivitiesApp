@@ -66,6 +66,15 @@
         </div>
     </div>
 
+    <!-- Quota Warning Banner -->
+    @if (quotaWarningMessage != null && !quotaBannerDismissed)
+    {
+        <div class="quota-banner @(quotaWarningLevel)" style="padding:8px 16px;margin-bottom:12px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;font-size:0.9rem;@(quotaWarningLevel == "critical" ? "background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" : "background:#fef9c3;color:#854d0e;border:1px solid #fde047;")">
+            <span>@quotaWarningMessage</span>
+            <button @onclick="() => quotaBannerDismissed = true" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0 4px;">✕</button>
+        </div>
+    }
+
     <!-- Recently Viewed Section -->
     @if (recentActivities != null && recentActivities.Any())
     {
@@ -213,7 +222,6 @@
 
     private List<Activity>? recentActivities;
     private Dictionary<string, List<Activity>> cachedActivitiesByTag = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> backgroundWarmCompletedTags = new(StringComparer.OrdinalIgnoreCase);
     private List<Activity>? filteredActivities;
     private string? selectedTag;
     private bool isLoadingFiltered;
@@ -230,6 +238,11 @@
     // retry up to N times (MAUI returns stale/empty cache, background refresh brings real data).
     // Reset on location change so each new location gets fresh retries.
     private int _emptyTagRetryCount;
+
+    // Quota warning
+    private string? quotaWarningMessage;
+    private string quotaWarningLevel = "warning"; // "warning" or "critical"
+    private bool quotaBannerDismissed;
 
     // Location popup
     private bool showLocationPopup;
@@ -296,7 +309,8 @@
             startupComplete = true;
             Logger.LogInformation("Home startup complete: cachedTags={CachedCount}, hasLocation={HasLocation}, hasActiveLocation={HasActive}, recentlyViewedCount={RecentCount}",
                 cachedActivitiesByTag.Count, hasLocation, hasActiveLocation, recentActivities?.Count ?? 0);
-            _ = StartBackgroundWarmAsync("startup");
+            // Background warm removed to reduce Google API costs — tags load on-demand when clicked
+            _ = CheckQuotaStatusAsync();
         }
     }
 
@@ -318,7 +332,7 @@
                 await EnsureTagLoadedAsync(selectedTag, "location_changed_selected_tag");
             }
 
-            _ = StartBackgroundWarmAsync("location_changed");
+            // Background warm removed to reduce Google API costs — tags reload on next click
         });
     }
 
@@ -350,7 +364,6 @@
                 foreach (var tag in emptyTags)
                 {
                     cachedActivitiesByTag.Remove(tag);
-                    backgroundWarmCompletedTags.Remove(tag);
                 }
 
                 // Re-fetch the selected tag immediately so the user sees results
@@ -426,44 +439,53 @@
         StateHasChanged();
     }
 
+    private async Task CheckQuotaStatusAsync()
+    {
+        try
+        {
+            var status = await ActivityService.GetQuotaStatusAsync();
+            if (status == null) return;
+
+            var items = new[]
+            {
+                ("Nearby Search", status.NearbySearch),
+                ("Place Details", status.PlaceDetails),
+                ("Photos", status.Photos),
+                ("Geocoding", status.Geocoding)
+            };
+
+            var worst = items.MaxBy(x => x.Item2.Percentage);
+            if (worst.Item2.Percentage >= 95)
+            {
+                quotaWarningLevel = "critical";
+                quotaWarningMessage = $"Daily API limit nearly reached — discovery may be limited ({worst.Item1}: {worst.Item2.Used}/{worst.Item2.Limit})";
+            }
+            else if (worst.Item2.Percentage >= 80)
+            {
+                quotaWarningLevel = "warning";
+                quotaWarningMessage = $"API usage: {worst.Item1} at {worst.Item2.Used}/{worst.Item2.Limit} today";
+            }
+
+            if (quotaWarningMessage != null)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check quota status");
+        }
+    }
+
     private void ResetTagCache(string trigger)
     {
         var nextGeneration = Interlocked.Increment(ref cacheGeneration);
         cachedActivitiesByTag = new(StringComparer.OrdinalIgnoreCase);
-        backgroundWarmCompletedTags = new(StringComparer.OrdinalIgnoreCase);
         _emptyTagRetryCount = 0;
 
         Logger.LogInformation(
             "Home cache reset: generation={Generation}, trigger={Trigger}, hasActiveLocation={HasActiveLocation}, activeLat={Lat}, activeLng={Lng}",
             nextGeneration, trigger, hasActiveLocation, activeLat, activeLng);
-    }
-
-    private async Task StartBackgroundWarmAsync(string trigger)
-    {
-        var generation = cacheGeneration;
-        var warmSw = System.Diagnostics.Stopwatch.StartNew();
-
-        Logger.LogInformation("Home background warm started: generation={Generation}, trigger={Trigger}", generation, trigger);
-
-        foreach (var tag in tagCards)
-        {
-            if (generation != cacheGeneration)
-            {
-                Logger.LogInformation("Home background warm stopped: stale generation={Generation}, currentGeneration={CurrentGeneration}", generation, cacheGeneration);
-                return;
-            }
-
-            if (backgroundWarmCompletedTags.Contains(tag.Name))
-            {
-                Logger.LogDebug("Home background warm skipping tag={Tag}, reason=already_completed", tag.Name);
-                continue;
-            }
-
-            await EnsureTagLoadedAsync(tag.Name, $"{trigger}_background", isUserInitiated: false);
-        }
-
-        Logger.LogInformation("Home background warm completed: generation={Generation}, trigger={Trigger}, cachedTags={CachedTagCount}, elapsed={Ms}ms",
-            generation, trigger, cachedActivitiesByTag.Count, warmSw.ElapsedMilliseconds);
     }
 
     private async Task EnsureTagLoadedAsync(string tagName, string trigger, bool isUserInitiated = true)
@@ -524,7 +546,6 @@
             }
 
             cachedActivitiesByTag[tagName] = matchingActivities;
-            backgroundWarmCompletedTags.Add(tagName);
 
             var fastImages = matchingActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.Contains("/api/photos?r="));
             var slowImages = matchingActivities.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl) && a.ImageUrl.Contains("/api/photos/place/"));

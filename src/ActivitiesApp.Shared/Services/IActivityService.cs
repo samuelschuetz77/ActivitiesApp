@@ -23,4 +23,7 @@ public interface IActivityService
 
     // Geocode a full address to coordinates
     Task<ZipLookupResult?> GeocodeAddressAsync(string address);
+
+    // API quota status
+    Task<QuotaStatusResponse?> GetQuotaStatusAsync() => Task.FromResult<QuotaStatusResponse?>(null);
 }

@@ -58,6 +58,7 @@ public static class Extensions
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddMeter(builder.Environment.ApplicationName)
+                    .AddMeter("ActivitiesApp.GoogleApi")
                     .AddRuntimeInstrumentation();
             })
             .WithTracing(tracing =>
