@@ -300,7 +300,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (api_type) (increase(google_api_requests_total{service_name=\"activitiesapp-api\"}[$__range]))",
+          "expr": "sum by (api_type) (increase(google_api_requests_total[$__range]))",
           "instant": true,
           "legendFormat": "{{api_type}}",
           "refId": "A"
@@ -338,7 +338,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (api_type) (increase(google_api_requests_total{service_name=\"activitiesapp-api\", api_type=~\"$google_api_type\"}[$__rate_interval]))",
+          "expr": "sum by (api_type) (increase(google_api_requests_total{api_type=~\"$google_api_type\"}[$__interval]))",
           "legendFormat": "{{api_type}}",
           "range": true,
           "refId": "A"
@@ -367,7 +367,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(google_api_requests_total{service_name=\"activitiesapp-api\"}, api_type)",
+        "definition": "label_values(google_api_requests_total, api_type)",
         "includeAll": true,
         "label": "Request Type",
         "multi": true,
@@ -375,7 +375,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(google_api_requests_total{service_name=\"activitiesapp-api\"}, api_type)",
+          "query": "label_values(google_api_requests_total, api_type)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -385,7 +385,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now/d",
     "to": "now"
   },
   "timepicker": {},
