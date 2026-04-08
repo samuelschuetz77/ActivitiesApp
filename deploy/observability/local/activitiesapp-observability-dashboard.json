@@ -300,13 +300,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (api_type) (increase(google_api_requests_total[$__range]))",
+          "expr": "sum by (deployment_environment, api_type) (increase(google_api_requests_total{deployment_environment=~\"$google_environment\", api_type=~\"$google_api_type\"}[$__range]))",
           "instant": true,
-          "legendFormat": "{{api_type}}",
+          "legendFormat": "{{deployment_environment}} {{api_type}}",
           "refId": "A"
         }
       ],
-      "title": "Google API Requests in Selected Range",
+      "title": "Google API Requests by Environment",
       "type": "bargauge"
     },
     {
@@ -338,13 +338,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (api_type) (increase(google_api_requests_total{api_type=~\"$google_api_type\"}[$__interval]))",
-          "legendFormat": "{{api_type}}",
+          "expr": "sum by (deployment_environment, api_type) (increase(google_api_requests_total{deployment_environment=~\"$google_environment\", api_type=~\"$google_api_type\"}[$__interval]))",
+          "legendFormat": "{{deployment_environment}} {{api_type}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Google API Requests Over Time",
+      "title": "Google API Request Trend",
       "type": "timeseries"
     }
   ],
@@ -356,6 +356,32 @@
   ],
   "templating": {
     "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(google_api_requests_total, deployment_environment)",
+        "includeAll": true,
+        "label": "Environment",
+        "multi": true,
+        "name": "google_environment",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(google_api_requests_total, deployment_environment)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
       {
         "allValue": ".*",
         "current": {
