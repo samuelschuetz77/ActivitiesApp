@@ -6,6 +6,7 @@ namespace ActivitiesApp.Infrastructure.Data
     public class AppDbContext : DbContext, IActivityDbContext
     {
         public DbSet<Activity> Activities { get; set; }
+        public DbSet<GoogleApiDailyUsage> GoogleApiDailyUsages { get; set; }
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
@@ -81,6 +82,31 @@ namespace ActivitiesApp.Infrastructure.Data
             modelBuilder.Entity<Activity>()
                 .Property(a => a.IsDeleted)
                 .ToJsonProperty("isDeleted");
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .ToContainer("GoogleApiDailyUsage")
+                .HasPartitionKey(u => u.ApiType)
+                .UseETagConcurrency();
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .Property(u => u.Id)
+                .ToJsonProperty("id");
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .Property(u => u.UsageDate)
+                .ToJsonProperty("usageDate");
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .Property(u => u.ApiType)
+                .ToJsonProperty("apiType");
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .Property(u => u.RequestCount)
+                .ToJsonProperty("requestCount");
+
+            modelBuilder.Entity<GoogleApiDailyUsage>()
+                .Property(u => u.UpdatedAt)
+                .ToJsonProperty("updatedAt");
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -88,6 +114,14 @@ namespace ActivitiesApp.Infrastructure.Data
             var now = DateTimeOffset.UtcNow;
 
             foreach (var entry in ChangeTracker.Entries<Activity>())
+            {
+                if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+                {
+                    entry.Entity.UpdatedAt = now;
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<GoogleApiDailyUsage>())
             {
                 if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
                 {

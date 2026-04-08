@@ -1,7 +1,9 @@
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace ActivitiesApp.Api.Services;
 
@@ -11,11 +13,8 @@ public class GooglePlacesService
     private readonly string _apiKey;
     private readonly ILogger<GooglePlacesService> _logger;
     private readonly Counter<long> _requestCounter;
+    private readonly IActivityDbContext _db;
 
-    // Daily quota tracking — keyed by "{date}:{apiType}"
-    private static readonly ConcurrentDictionary<string, int> DailyUsage = new();
-
-    // Quota limits matching GCP console settings
     public static readonly Dictionary<string, int> QuotaLimits = new()
     {
         ["nearby_search"] = 50,
@@ -30,12 +29,18 @@ public class GooglePlacesService
         PropertyNameCaseInsensitive = true
     };
 
-    public GooglePlacesService(HttpClient http, IConfiguration config, ILogger<GooglePlacesService> logger, IMeterFactory meterFactory)
+    public GooglePlacesService(
+        HttpClient http,
+        IConfiguration config,
+        ILogger<GooglePlacesService> logger,
+        IMeterFactory meterFactory,
+        IActivityDbContext db)
     {
         _http = http;
         _apiKey = config["GoogleMaps:ApiKey"]
             ?? throw new InvalidOperationException("GoogleMaps:ApiKey is not configured.");
         _logger = logger;
+        _db = db;
 
         var meter = meterFactory.Create("ActivitiesApp.GoogleApi");
         _requestCounter = meter.CreateCounter<long>(
@@ -44,23 +49,92 @@ public class GooglePlacesService
             description: "Total Google API requests by type");
     }
 
-    private void TrackRequest(string apiType)
+    private async Task TrackRequestAsync(string apiType, CancellationToken cancellationToken = default)
     {
         _requestCounter.Add(1, new KeyValuePair<string, object?>("api_type", apiType));
-        var key = $"{DateTime.UtcNow:yyyy-MM-dd}:{apiType}";
-        DailyUsage.AddOrUpdate(key, 1, (_, count) => count + 1);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var id = $"{today:yyyy-MM-dd}:{apiType}";
+        if (_db is DbContext dbContext &&
+            string.Equals(dbContext.Database.ProviderName, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal))
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO google_api_daily_usage (id, usage_date, api_type, request_count, updated_at)
+                VALUES ({id}, {today}, {apiType}, 1, {DateTimeOffset.UtcNow})
+                ON CONFLICT (usage_date, api_type)
+                DO UPDATE SET
+                    request_count = google_api_daily_usage.request_count + 1,
+                    updated_at = EXCLUDED.updated_at",
+                cancellationToken);
+            return;
+        }
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                var usage = await _db.GoogleApiDailyUsages.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+                if (usage is null)
+                {
+                    usage = new GoogleApiDailyUsage
+                    {
+                        Id = id,
+                        UsageDate = today,
+                        ApiType = apiType,
+                        RequestCount = 1
+                    };
+                    _db.GoogleApiDailyUsages.Add(usage);
+                }
+                else
+                {
+                    usage.RequestCount += 1;
+                }
+
+                await _db.SaveChangesAsync(cancellationToken);
+                return;
+            }
+            catch (DbUpdateException) when (attempt < 2)
+            {
+                DetachTrackedUsageEntries(id);
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < 2)
+            {
+                DetachTrackedUsageEntries(id);
+            }
+        }
     }
 
-    public static Dictionary<string, QuotaStatus> GetQuotaStatus()
+    private void DetachTrackedUsageEntries(string id)
     {
-        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        if (_db is not DbContext dbContext)
+        {
+            return;
+        }
+
+        foreach (var entry in dbContext.ChangeTracker.Entries<GoogleApiDailyUsage>()
+                     .Where(entry => string.Equals(entry.Entity.Id, id, StringComparison.Ordinal)))
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
+
+    public static async Task<Dictionary<string, QuotaStatus>> GetQuotaStatusAsync(
+        IActivityDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var usageToday = await db.GoogleApiDailyUsages
+            .Where(u => u.UsageDate == today)
+            .ToDictionaryAsync(u => u.ApiType, u => u.RequestCount, cancellationToken);
+
         var result = new Dictionary<string, QuotaStatus>();
         foreach (var (apiType, limit) in QuotaLimits)
         {
-            var key = $"{today}:{apiType}";
-            DailyUsage.TryGetValue(key, out var used);
+            usageToday.TryGetValue(apiType, out var used);
             result[apiType] = new QuotaStatus(used, limit);
         }
+
         return result;
     }
 
@@ -77,7 +151,7 @@ public class GooglePlacesService
         if (!string.IsNullOrEmpty(keyword))
             url += $"&keyword={Uri.EscapeDataString(keyword)}";
 
-        TrackRequest("nearby_search");
+        await TrackRequestAsync("nearby_search");
         _logger.LogInformation(
             "Google Nearby Search request: lat={Lat}, lng={Lng}, radius={RadiusMeters}, type={Type}, keyword={Keyword}",
             lat, lng, radiusMeters, type ?? "", keyword ?? "");
@@ -126,7 +200,7 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/place/details/json" +
                   $"?place_id={Uri.EscapeDataString(placeId)}&fields={fields}&key={_apiKey}";
 
-        TrackRequest("place_details");
+        await TrackRequestAsync("place_details");
         _logger.LogInformation("Google Place Details request for {PlaceId}", placeId);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -174,7 +248,7 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
                   $"?latlng={lat},{lng}&key={_apiKey}";
 
-        TrackRequest("geocode");
+        await TrackRequestAsync("geocode");
         _logger.LogInformation("Google Reverse Geocode request for ({Lat},{Lng})", lat, lng);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -190,7 +264,7 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
                   $"?address={Uri.EscapeDataString(address)}&key={_apiKey}";
 
-        TrackRequest("geocode");
+        await TrackRequestAsync("geocode");
         _logger.LogInformation("Google address geocode request for {Address}", address);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -217,7 +291,7 @@ public class GooglePlacesService
         var url = $"https://maps.googleapis.com/maps/api/geocode/json" +
                   $"?components=postal_code:{Uri.EscapeDataString(normalizedPostalCode)}|country:US&key={_apiKey}";
 
-        TrackRequest("geocode");
+        await TrackRequestAsync("geocode");
         _logger.LogInformation("Google ZIP geocode request for postal code {PostalCode}", normalizedPostalCode);
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -240,15 +314,12 @@ public class GooglePlacesService
         return (location.Lat, location.Lng, address);
     }
 
-    /// <summary>
-    /// Fetches a Google Places photo server-side, keeping the API key hidden from clients.
-    /// </summary>
     public async Task<byte[]?> FetchPhotoAsync(string photoReference, int maxWidth)
     {
         var url = $"https://maps.googleapis.com/maps/api/place/photo" +
                   $"?maxwidth={maxWidth}&photoreference={Uri.EscapeDataString(photoReference)}&key={_apiKey}";
 
-        TrackRequest("photo");
+        await TrackRequestAsync("photo");
         var response = await _http.GetAsync(url);
         if (!response.IsSuccessStatusCode) return null;
 
@@ -259,8 +330,6 @@ public class GooglePlacesService
     {
         return $"/api/photos?r={Uri.EscapeDataString(photoReference)}&maxwidth={maxWidth}";
     }
-
-    // ─── DTOs for Google API JSON responses ───
 
     public record GeocodeResponse
     {
@@ -332,8 +401,6 @@ public class GooglePlacesService
         public string? Text { get; init; }
         public string? RelativeTimeDescription { get; init; }
     }
-
-    // ─── Clean output models ───
 
     public class NearbyPlace
     {

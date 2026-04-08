@@ -6,5 +6,6 @@ namespace ActivitiesApp.Infrastructure.Data;
 public interface IActivityDbContext
 {
     DbSet<Activity> Activities { get; set; }
+    DbSet<GoogleApiDailyUsage> GoogleApiDailyUsages { get; set; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -113,6 +113,41 @@ namespace ActivitiesApp.Infrastructure.Migrations.Migrations
 
                     b.ToTable("activities", (string)null);
                 });
+
+            modelBuilder.Entity("ActivitiesApp.Infrastructure.Models.GoogleApiDailyUsage", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApiType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("api_type");
+
+                    b.Property<int>("RequestCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("request_count");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateOnly>("UsageDate")
+                        .HasColumnType("date")
+                        .HasColumnName("usage_date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsageDate");
+
+                    b.HasIndex("UsageDate", "ApiType")
+                        .IsUnique();
+
+                    b.ToTable("google_api_daily_usage", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

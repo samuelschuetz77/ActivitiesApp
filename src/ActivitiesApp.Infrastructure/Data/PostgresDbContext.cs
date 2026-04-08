@@ -6,6 +6,7 @@ namespace ActivitiesApp.Infrastructure.Data;
 public class PostgresDbContext : DbContext, IActivityDbContext
 {
     public DbSet<Activity> Activities { get; set; }
+    public DbSet<GoogleApiDailyUsage> GoogleApiDailyUsages { get; set; }
 
     public PostgresDbContext(DbContextOptions<PostgresDbContext> options) : base(options)
     {
@@ -42,6 +43,20 @@ public class PostgresDbContext : DbContext, IActivityDbContext
             entity.HasIndex(a => a.UpdatedAt);
             entity.HasIndex(a => a.CreatedByUserId);
         });
+
+        modelBuilder.Entity<GoogleApiDailyUsage>(entity =>
+        {
+            entity.ToTable("google_api_daily_usage");
+            entity.HasKey(u => u.Id);
+            entity.Property(u => u.Id).HasColumnName("id").HasMaxLength(64);
+            entity.Property(u => u.UsageDate).HasColumnName("usage_date");
+            entity.Property(u => u.ApiType).HasColumnName("api_type").HasMaxLength(64);
+            entity.Property(u => u.RequestCount).HasColumnName("request_count");
+            entity.Property(u => u.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(u => u.UsageDate);
+            entity.HasIndex(u => new { u.UsageDate, u.ApiType }).IsUnique();
+        });
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -55,6 +70,14 @@ public class PostgresDbContext : DbContext, IActivityDbContext
                 // Activitytime is an event/local wall-clock time, not an absolute instant.
                 // Normalize the kind so Npgsql writes it to "timestamp without time zone".
                 entry.Entity.Activitytime = DateTime.SpecifyKind(entry.Entity.Activitytime, DateTimeKind.Unspecified);
+                entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<GoogleApiDailyUsage>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
                 entry.Entity.UpdatedAt = now;
             }
         }
