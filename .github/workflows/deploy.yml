@@ -1,4 +1,4 @@
-name: Kubernetes Build & Deploy
+caename: Kubernetes Build & Deploy
 
 on:
   push:
@@ -182,11 +182,7 @@ jobs:
           echo "=== Events (last 5 min) ==="
           kubectl get events --namespace=activitiesapp --sort-by='.lastTimestamp' | tail -20
 
-      - name: Dump logs on failure
+      - name: Notify on failure
         if: failure()
         run: |
-          echo "=== API logs ==="
-          kubectl logs deployment/activitiesapp-api --namespace=activitiesapp --tail=50 || true
-          echo ""
-          echo "=== Web logs ==="
-          kubectl logs deployment/activitiesapp-web --namespace=activitiesapp --tail=50 || true
+          curl -d "Pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
