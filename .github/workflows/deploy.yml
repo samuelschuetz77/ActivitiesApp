@@ -28,9 +28,42 @@ jobs:
       - name: Build Web
         run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
 
+  lint:
+    name: Lint
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint API
+        run: |
+          docker run \
+            --rm \
+            -u $(id -u):$(id -g) \
+            -e DOTNET_CLI_HOME=/tmp/dotnet-home \
+            -e HOME=/tmp \
+            -e NUGET_PACKAGES=/tmp/nuget-packages \
+            -v .:/app \
+            -w /app \
+            mcr.microsoft.com/dotnet/sdk:10.0 \
+              dotnet format --verify-no-changes src/ActivitiesApp.Api/ActivitiesApp.Api.csproj
+
+      - name: Lint Web
+        run: |
+          docker run \
+            --rm \
+            -u $(id -u):$(id -g) \
+            -e DOTNET_CLI_HOME=/tmp/dotnet-home \
+            -e HOME=/tmp \
+            -e NUGET_PACKAGES=/tmp/nuget-packages \
+            -v .:/app \
+            -w /app \
+            mcr.microsoft.com/dotnet/sdk:10.0 \
+              dotnet format --verify-no-changes src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
+
   test:
     name: Test
-    needs: build
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
