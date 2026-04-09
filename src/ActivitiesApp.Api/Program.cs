@@ -158,8 +158,8 @@ using (var scope = app.Services.CreateScope())
             }
             else
             {
-            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
-        }
+                startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            }
         }
         else
         {
