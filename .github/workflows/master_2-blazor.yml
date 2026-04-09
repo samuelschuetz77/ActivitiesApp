@@ -62,4 +62,13 @@ jobs:
           app-name: '2-Blazor'
           slot-name: 'Production'
           package: .
+  notify:
+    name: Notify on failure
+    needs: [build, deploy]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
+        run: |
+          curl -d "Blazor pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
           

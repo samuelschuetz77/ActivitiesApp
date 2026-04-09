@@ -83,4 +83,14 @@ jobs:
               OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf" \
               OTEL_SERVICE_NAME="activitiesapp-api" \
               OTEL_RESOURCE_ATTRIBUTES="deployment.environment=azure,service.namespace=activitiesapp"
+
+  notify:
+    name: Notify on failure
+    needs: [build, deploy]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
+        run: |
+          curl -d "API pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
           

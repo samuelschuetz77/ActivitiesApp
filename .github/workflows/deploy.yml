@@ -1,4 +1,4 @@
-caename: Kubernetes Build & Deploy
+name: Kubernetes Build & Deploy
 
 on:
   push:
@@ -182,7 +182,12 @@ jobs:
           echo "=== Events (last 5 min) ==="
           kubectl get events --namespace=activitiesapp --sort-by='.lastTimestamp' | tail -20
 
-      - name: Notify on failure
-        if: failure()
+  notify:
+    name: Notify on failure
+    needs: [build, lint, test, push, cd]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
         run: |
-          curl -d "Pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
+          curl -d "Kubernetes pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
