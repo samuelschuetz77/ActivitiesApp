@@ -10,7 +10,7 @@ public class GooglePlaceTagMapperTests
     {
         var tags = GooglePlaceTagMapper.GetTags(["restaurant"]);
 
-        Assert.Contains("Food + Drink", tags); // Change '+' to '&'
+        Assert.Contains("Food & Drink", tags);
     }
 
     [Fact]
