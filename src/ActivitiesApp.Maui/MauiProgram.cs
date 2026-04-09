@@ -5,6 +5,8 @@ using ActivitiesApp.Data;
 using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Services;
 using ActivitiesApp.Protos;
+using ActivitiesApp.ViewModels;
+using ActivitiesApp.Pages;
 using Grpc.Net.Client;
 
 namespace ActivitiesApp;
@@ -68,6 +70,18 @@ public static class MauiProgram
 
         // Offline-first activity service replaces direct gRPC client for MAUI
         builder.Services.AddScoped<IActivityService, OfflineActivityService>();
+
+        // ViewModels
+        builder.Services.AddTransient<HomeViewModel>();
+        builder.Services.AddTransient<ActivitiesViewModel>();
+        builder.Services.AddTransient<CreateViewModel>();
+        builder.Services.AddTransient<ProfileViewModel>();
+
+        // Pages
+        builder.Services.AddTransient<HomePage>();
+        builder.Services.AddTransient<ActivitiesPage>();
+        builder.Services.AddTransient<CreatePage>();
+        builder.Services.AddTransient<ProfilePage>();
 
         builder.Services.AddMauiBlazorWebView();
 

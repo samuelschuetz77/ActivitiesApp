@@ -13,4 +13,6 @@ public class FormFactor : IFormFactor
     {
         return DeviceInfo.Platform.ToString() + " - " + DeviceInfo.VersionString;
     }
+
+    public bool IsNative => true;
 }

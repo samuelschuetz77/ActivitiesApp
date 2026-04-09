@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:pages="clr-namespace:ActivitiesApp.Pages"
+       x:Class="ActivitiesApp.AppShell"
+       Shell.FlyoutBehavior="Disabled"
+       Shell.TabBarBackgroundColor="White"
+       Shell.TabBarForegroundColor="#1b6ec2"
+       Shell.TabBarUnselectedColor="#999999"
+       Shell.TabBarTitleColor="#1b6ec2">
+
+    <TabBar>
+        <Tab Title="Home" Icon="tab_home.png">
+            <ShellContent ContentTemplate="{DataTemplate pages:HomePage}" />
+        </Tab>
+
+        <Tab Title="Activities" Icon="tab_activities.png">
+            <ShellContent ContentTemplate="{DataTemplate pages:ActivitiesPage}" />
+        </Tab>
+
+        <Tab Title="Create" Icon="tab_create.png">
+            <ShellContent ContentTemplate="{DataTemplate pages:CreatePage}" />
+        </Tab>
+
+        <Tab Title="Profile" Icon="tab_profile.png">
+            <ShellContent ContentTemplate="{DataTemplate pages:ProfilePage}" />
+        </Tab>
+    </TabBar>
+
+</Shell>

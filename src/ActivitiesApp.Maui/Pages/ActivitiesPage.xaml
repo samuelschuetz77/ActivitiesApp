@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:shared="clr-namespace:ActivitiesApp.Shared;assembly=ActivitiesApp.Shared"
+             xmlns:vm="clr-namespace:ActivitiesApp.ViewModels"
+             x:Class="ActivitiesApp.Pages.ActivitiesPage"
+             x:DataType="vm:ActivitiesViewModel"
+             Title="{Binding Title}">
+
+    <BlazorWebView HostPage="wwwroot/index.html" StartPath="/activities">
+        <BlazorWebView.RootComponents>
+            <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
+        </BlazorWebView.RootComponents>
+    </BlazorWebView>
+
+</ContentPage>

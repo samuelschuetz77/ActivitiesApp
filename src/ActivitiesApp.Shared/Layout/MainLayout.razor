@@ -1,12 +1,16 @@
 @inherits LayoutComponentBase
+@inject IFormFactor FormFactor
 
-<div class="app-shell">
-    <header class="app-header">
-        <a class="app-brand" href="">
-            <span class="brand-name">ActivitiesApp</span>
-        </a>
-        <NavMenu />
-    </header>
+<div class="app-shell @(FormFactor.IsNative ? "native" : "")">
+    @if (!FormFactor.IsNative)
+    {
+        <header class="app-header">
+            <a class="app-brand" href="">
+                <span class="brand-name">ActivitiesApp</span>
+            </a>
+            <NavMenu />
+        </header>
+    }
 
     <main class="app-main">
         <article class="app-content">

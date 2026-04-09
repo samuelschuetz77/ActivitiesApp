@@ -46,9 +46,18 @@
     padding: 1.5rem 2rem;
 }
 
+/* Native MAUI: no header or bottom tab bar in Blazor — Shell handles both */
+.app-shell.native {
+    padding-bottom: 0;
+}
+
+.app-shell.native .app-content {
+    padding: 1rem;
+}
+
 @media (max-width: 640.98px) {
-    /* Reserve space for the fixed bottom tab bar */
-    .app-shell {
+    /* Reserve space for the fixed bottom tab bar (web only) */
+    .app-shell:not(.native) {
         padding-bottom: 4.5rem;
     }
 
