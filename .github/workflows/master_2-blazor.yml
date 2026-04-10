@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Blazor Build and deploy
+name: Build and deploy ASP.Net Core app to Azure Web App - 2-Blazor
 
 on:
   push:
@@ -24,10 +24,10 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Build with dotnet
-        run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj --configuration Release
+        run: dotnet build --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -51,9 +51,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_6EDD3408F2F34900866C69D1DE16A13E }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_8430D0F93FF148658721A8721B84C17E }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_D8C203175ABE4798A1D7A9498C263672 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_5B1EC362FE4C4798871DA23008BCF62A }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E665E16707F64B5F85042216C71A3E27 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_53D8F426C8D245D78F3904ED65AE2BF8 }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -62,13 +62,4 @@ jobs:
           app-name: '2-Blazor'
           slot-name: 'Production'
           package: .
-  notify:
-    name: Notify on failure
-    needs: [build, deploy]
-    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send ntfy notification
-        run: |
-          curl -d "Blazor pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
           
