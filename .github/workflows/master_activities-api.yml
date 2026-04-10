@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy ASP.Net Core app to Azure Web App - Activities-API
+name: API Build and deploy
 
 on:
   push:
@@ -24,10 +24,10 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Build with dotnet
-        run: dotnet build --configuration Release
+        run: dotnet build src/ActivitiesApp.Api/ActivitiesApp.Api.csproj --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish src/ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -55,6 +55,27 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_420C495F8E8340FAA41766E7FF25002C }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E82FBCC8A70741DC84520EAB81F9B0EF }}
 
+      - name: Resolve Azure Web App resource group
+        id: resolve-rg
+        run: |
+          RG=$(az webapp list --query "[?name=='Activities-API'].resourceGroup | [0]" -o tsv)
+          if [ -z "$RG" ]; then
+            echo "Failed to resolve resource group for Activities-API" >&2
+            exit 1
+          fi
+          echo "resource_group=$RG" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Azure App Service OTEL settings
+        run: |
+          az webapp config appsettings set \
+            --name Activities-API \
+            --resource-group "${{ steps.resolve-rg.outputs.resource_group }}" \
+            --settings \
+              OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp.activor.duckdns.org" \
+              OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf" \
+              OTEL_SERVICE_NAME="activitiesapp-api" \
+              OTEL_RESOURCE_ATTRIBUTES="deployment.environment=azure,service.namespace=activitiesapp"
+
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
@@ -62,4 +83,13 @@ jobs:
           app-name: 'Activities-API'
           slot-name: 'Production'
           package: .
-          
+
+  notify:
+    name: Notify on failure
+    needs: [build, deploy]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
+        run: |
+          curl -d "API pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929

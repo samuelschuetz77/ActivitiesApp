@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy ASP.Net Core app to Azure Web App - 2-Blazor
+name: Blazor Build and deploy
 
 on:
   push:
@@ -24,10 +24,10 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Build with dotnet
-        run: dotnet build --configuration Release
+        run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -62,4 +62,13 @@ jobs:
           app-name: '2-Blazor'
           slot-name: 'Production'
           package: .
-          
+
+  notify:
+    name: Notify on failure
+    needs: [build, deploy]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
+        run: |
+          curl -d "Blazor pipeline failed" ntfy.sh/1870b897-74f4-42bf-9d8e-610eb6538929
