@@ -3,6 +3,8 @@ using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,11 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 #pragma warning restore ASPDEPR005
     options.KnownProxies.Clear();
 });
+
+// Microsoft Entra ID authentication
+builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAd");
+builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
+builder.Services.AddAuthorization();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -66,9 +73,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapControllers();
 
 // Diagnostic endpoints
 app.MapGet("/api/version", () => Results.Ok(new

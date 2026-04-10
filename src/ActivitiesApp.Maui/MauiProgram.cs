@@ -29,12 +29,17 @@ public static class MauiProgram
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddSingleton<IConnectivity>(Connectivity.Current);
 
+        // MSAL auth service
+        builder.Services.AddSingleton<AuthService>();
+
         var apiAddress = builder.Configuration["ApiAddress"] ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net";
 
-        // REST HttpClient for OfflineActivityService
+        // REST HttpClient for OfflineActivityService (with auth header)
         builder.Services.AddSingleton(sp =>
         {
-            var client = new HttpClient { BaseAddress = new Uri(apiAddress) };
+            var authService = sp.GetRequiredService<AuthService>();
+            var handler = new AuthHeaderHandler(authService);
+            var client = new HttpClient(handler) { BaseAddress = new Uri(apiAddress) };
             client.Timeout = TimeSpan.FromSeconds(30);
             return client;
         });
@@ -82,6 +87,7 @@ public static class MauiProgram
         builder.Services.AddTransient<ActivitiesPage>();
         builder.Services.AddTransient<CreatePage>();
         builder.Services.AddTransient<ProfilePage>();
+        builder.Services.AddTransient<LoginPage>();
 
         builder.Services.AddMauiBlazorWebView();
 

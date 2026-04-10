@@ -9,6 +9,17 @@
                 <span class="brand-name">ActivitiesApp</span>
             </a>
             <NavMenu />
+            <div class="login-display">
+                <AuthorizeView>
+                    <Authorized>
+                        <span class="text-white me-2">Hello, @context.User.Identity?.Name</span>
+                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignOut">Sign Out</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignIn">Sign In</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
         </header>
     }
 

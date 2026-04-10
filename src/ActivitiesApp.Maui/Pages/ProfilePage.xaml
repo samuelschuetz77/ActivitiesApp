@@ -1,16 +1,30 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:shared="clr-namespace:ActivitiesApp.Shared;assembly=ActivitiesApp.Shared"
-             xmlns:vm="clr-namespace:ActivitiesApp.ViewModels"
              x:Class="ActivitiesApp.Pages.ProfilePage"
-             x:DataType="vm:ProfileViewModel"
-             Title="{Binding Title}">
+             Title="Profile">
 
-    <BlazorWebView HostPage="wwwroot/index.html" StartPath="/profile">
-        <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
-        </BlazorWebView.RootComponents>
-    </BlazorWebView>
+    <VerticalStackLayout Padding="20" VerticalOptions="Center" Spacing="16">
+        <Label Text="Profile"
+               FontSize="24"
+               FontAttributes="Bold"
+               HorizontalOptions="Center" />
+
+        <Label x:Name="WelcomeLabel"
+               Text="Hello, you are logged in as ..."
+               FontSize="16"
+               HorizontalOptions="Center"
+               TextColor="#333333" />
+
+        <Button Text="Sign Out"
+                Clicked="OnSignOutClicked"
+                BackgroundColor="#dc3545"
+                TextColor="White"
+                FontSize="16"
+                Padding="20,12"
+                CornerRadius="8"
+                HorizontalOptions="Center"
+                Margin="0,20,0,0" />
+    </VerticalStackLayout>
 
 </ContentPage>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ActivitiesApp.Pages.LoginPage"
+             Shell.NavBarIsVisible="False"
+             Title="Sign In">
+
+    <VerticalStackLayout Padding="40" VerticalOptions="Center" HorizontalOptions="Center" Spacing="20">
+        <Label Text="ActivitiesApp"
+               FontSize="32"
+               FontAttributes="Bold"
+               HorizontalOptions="Center"
+               TextColor="#1b6ec2" />
+
+        <Label Text="Sign in to get started"
+               FontSize="16"
+               HorizontalOptions="Center"
+               TextColor="#666666" />
+
+        <Button Text="Sign in with Microsoft"
+                Clicked="OnSignInClicked"
+                BackgroundColor="#1b6ec2"
+                TextColor="White"
+                FontSize="16"
+                Padding="20,12"
+                CornerRadius="8"
+                HorizontalOptions="Center" />
+    </VerticalStackLayout>
+
+</ContentPage>

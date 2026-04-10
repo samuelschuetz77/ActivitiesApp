@@ -2,17 +2,12 @@ using ActivitiesApp.Infrastructure.Data;
 using ActivitiesApp.Infrastructure.Models;
 using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.IdentityModel.Tokens;
-using Npgsql;
+using Microsoft.Identity.Web;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using ActivitiesApp.Api.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -76,55 +71,10 @@ else
     builder.Services.AddScoped<IActivityDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 }
 
-// ─── Identity DbContext (always Postgres) ───
-var identityConnectionString = builder.Configuration.GetConnectionString("ActivitiesDb");
-if (string.IsNullOrEmpty(identityConnectionString))
-{
-    var host = builder.Configuration["POSTGRES_HOST"] ?? defaultPostgresHost;
-    var db = builder.Configuration["POSTGRES_DB"] ?? "activitiesdb";
-    var user = builder.Configuration["POSTGRES_USER"] ?? "activitiesapp";
-    var password = builder.Configuration["POSTGRES_PASSWORD"] ?? "activitiesapp";
-    identityConnectionString = $"Host={host};Port=5432;Database={db};Username={user};Password={password}";
-}
+// Identity DbContext removed — auth is now handled by Microsoft Entra ID
 
-builder.Services.AddDbContext<AppIdentityDbContext>(options =>
-    options.UseNpgsql(identityConnectionString, npgsql =>
-        npgsql.MigrationsAssembly("ActivitiesApp.Infrastructure.Migrations")));
-
-// ─── ASP.NET Core Identity ───
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-{
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 6;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
-    options.User.RequireUniqueEmail = true;
-})
-.AddEntityFrameworkStores<AppIdentityDbContext>()
-.AddDefaultTokenProviders();
-
-// ─── JWT Authentication ───
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretDevKey12345678901234567890";
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ActivitiesApp";
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = false,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
-    };
-});
-
+// ─── Microsoft Entra ID Authentication ───
+builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, "AzureAd");
 builder.Services.AddAuthorization();
 
 // Register Google Places service with HttpClient
@@ -174,50 +124,7 @@ using (var scope = app.Services.CreateScope())
         startupLog.LogInformation("Cosmos DB ensured");
     }
 
-    try
-    {
-        if (runMigrationsOnStartup)
-        {
-            var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
-            await identityContext.Database.MigrateAsync();
-            startupLog.LogInformation("Identity migrations applied");
-
-            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-
-            string[] roles = ["Admin", "User"];
-            foreach (var role in roles)
-            {
-                if (!await roleManager.RoleExistsAsync(role))
-                    await roleManager.CreateAsync(new IdentityRole(role));
-            }
-
-            var adminEmail = "admin@activitiesapp.com";
-            if (await userManager.FindByEmailAsync(adminEmail) == null)
-            {
-                var admin = new ApplicationUser
-                {
-                    UserName = adminEmail,
-                    Email = adminEmail,
-                    DisplayName = "Admin",
-                    EmailConfirmed = true
-                };
-                var result = await userManager.CreateAsync(admin, "Admin123!");
-                if (result.Succeeded)
-                    await userManager.AddToRoleAsync(admin, "Admin");
-            }
-        }
-        else
-        {
-            startupLog.LogInformation(
-                "Skipping Identity migrations and seed on startup. Set RUN_DB_MIGRATIONS_ON_STARTUP=true to enable them.");
-        }
-    }
-    catch (NpgsqlException ex) when (!dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
-    {
-        startupLog.LogWarning(ex, "Identity Postgres is unavailable (DbProvider={DbProvider}). Auth endpoints will not work. " +
-            "TODO: Configure POSTGRES_HOST and connection string in Azure App Service when enabling authentication.", dbProvider);
-    }
+    // Identity DB migrations removed — auth is now handled by Microsoft Entra ID
 }
 
 app.MapDefaultEndpoints();
@@ -329,7 +236,8 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     var validationErrors = ValidateActivityForCreate(activity);
     if (validationErrors.Count > 0)
     {
-        var userIdForRejectedRequest = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userIdForRejectedRequest = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+        ?? httpContext.User.FindFirstValue("oid");
         log.LogWarning(
             "REST CreateActivity rejected invalid payload from UserId={UserId}. Errors={ValidationErrors}. Name={Name}, City={City}, Category={Category}",
             userIdForRejectedRequest ?? "anonymous",
@@ -343,7 +251,8 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     }
 
     activity.Id = Guid.NewGuid();
-    var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    var userId = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+        ?? httpContext.User.FindFirstValue("oid");
     activity.CreatedByUserId = userId;
     try
     {

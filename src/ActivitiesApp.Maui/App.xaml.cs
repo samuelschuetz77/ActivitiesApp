@@ -1,4 +1,5 @@
 using ActivitiesApp.Data;
+using ActivitiesApp.Pages;
 using ActivitiesApp.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +46,22 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
+        var authService = _serviceProvider.GetRequiredService<AuthService>();
+
+        // Try to restore a cached session
+        _ = Task.Run(async () =>
+        {
+            var restored = await authService.TryRestoreSessionAsync();
+            if (!restored)
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    Windows[0].Page = _serviceProvider.GetRequiredService<LoginPage>();
+                });
+            }
+        });
+
+        // Start with AppShell optimistically; LoginPage will replace it if needed
         return new Window(new AppShell()) { Title = "ActivitiesApp" };
     }
 }
