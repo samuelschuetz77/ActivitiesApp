@@ -24,6 +24,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAd");
 builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
 builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

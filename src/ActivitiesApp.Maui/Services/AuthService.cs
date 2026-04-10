@@ -4,7 +4,7 @@ namespace ActivitiesApp.Services;
 
 public class AuthService
 {
-    private const string ClientId = "YOUR_CLIENT_ID_HERE";
+    private const string ClientId = "6d3dc4ee-33ce-4656-95c8-702a38464687";
     private const string TenantId = "dd619295-84ec-4c0d-a433-0076edc7c0d6";
     private const string Authority = $"https://login.microsoftonline.com/{TenantId}";
     private static readonly string[] Scopes = [$"api://{ClientId}/access_as_user"];

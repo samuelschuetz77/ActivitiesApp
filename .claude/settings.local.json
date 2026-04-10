@@ -42,7 +42,9 @@
       "Bash(rm -f api_build.log)",
       "Bash(git mv:*)",
       "Bash(dotnet test:*)",
-      "Bash(wc -l /c/Users/Samuel/Desktop/Mobile_Cloud/ActivitiesApp/src/ActivitiesApp.Maui/Pages/*.xaml)"
+      "Bash(wc -l /c/Users/Samuel/Desktop/Mobile_Cloud/ActivitiesApp/src/ActivitiesApp.Maui/Pages/*.xaml)",
+      "Bash(git fetch:*)",
+      "mcp__plugin_discord_discord__reply"
     ]
   }
 }
