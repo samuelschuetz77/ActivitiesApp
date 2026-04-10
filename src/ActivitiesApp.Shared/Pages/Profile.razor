@@ -1,7 +1,44 @@
-﻿@page "/profile"
+@page "/profile"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IFormFactor FormFactor
 
-<h3>Profile</h3>
+<PageTitle>Profile</PageTitle>
 
-@code {
+<div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+        <h3 class="mb-3">Profile</h3>
 
-}
+        @if (FormFactor.IsNative)
+        {
+            <p class="text-muted mb-0">
+                Native sign-in is handled by the MAUI profile screen.
+            </p>
+        }
+        else
+        {
+            <AuthorizeView>
+                <Authorized>
+                    <p class="mb-3">
+                        Signed in as <strong>@context.User.Identity?.Name</strong>
+                    </p>
+                    <a class="btn btn-outline-danger" href="MicrosoftIdentity/Account/SignOut">
+                        Sign Out
+                    </a>
+                </Authorized>
+                <NotAuthorized>
+                    <p class="text-muted mb-3">
+                        Use the hosted Azure sign-in flow from this page. The OIDC callback is handled after Microsoft Entra redirects back to the app.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-primary" href="MicrosoftIdentity/Account/SignIn">
+                            Sign In
+                        </a>
+                        <span class="btn btn-outline-secondary disabled" aria-disabled="true">
+                            Kubernetes Route Pending
+                        </span>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        }
+    </div>
+</div>

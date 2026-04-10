@@ -2,6 +2,7 @@ using ActivitiesApp.Web.Components;
 using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
@@ -22,6 +23,34 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 // Microsoft Entra ID authentication
 builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAd");
+builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, (OpenIdConnectOptions options) =>
+{
+    options.Events ??= new OpenIdConnectEvents();
+
+    options.Events.OnRemoteFailure = context =>
+    {
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("OpenIdConnect");
+        logger.LogError(context.Failure,
+            "OpenID Connect remote failure on {Path}",
+            context.Request.Path);
+
+        context.Response.Redirect("/Error");
+        context.HandleResponse();
+        return Task.CompletedTask;
+    };
+
+    options.Events.OnAuthenticationFailed = context =>
+    {
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("OpenIdConnect");
+        logger.LogError(context.Exception, "OpenID Connect authentication failed on {Path}", context.Request.Path);
+
+        context.Response.Redirect("/Error");
+        context.HandleResponse();
+        return Task.CompletedTask;
+    };
+});
 builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
