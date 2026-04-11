@@ -9,11 +9,6 @@
        Shell.TabBarUnselectedColor="#999999"
        Shell.TabBarTitleColor="#1b6ec2">
 
-    <ShellContent Route="login"
-                  ContentTemplate="{DataTemplate pages:LoginPage}"
-                  Shell.TabBarIsVisible="False"
-                  FlyoutItemIsVisible="False" />
-
     <TabBar>
         <Tab Title="Home" Icon="tab_home.png">
             <ShellContent ContentTemplate="{DataTemplate pages:HomePage}" />
