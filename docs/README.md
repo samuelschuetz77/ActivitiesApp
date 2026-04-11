@@ -43,16 +43,42 @@ Apply the app and observability manifests in `k8s/`.
 Recommended order:
 
 ```powershell
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/postgres-pvc.yaml -f k8s/postgres-dep.yaml -f k8s/postgres-svc.yaml
-kubectl apply -f k8s/otel-collector-configmap.yaml -f k8s/otel-collector-dep.yaml -f k8s/otel-collector-svc.yaml
-kubectl apply -f k8s/prometheus-configmap.yaml -f k8s/prometheus-dep.yaml -f k8s/prometheus-svc.yaml -f k8s/prometheus-ingress.yaml
-kubectl apply -f k8s/loki-configmap.yaml -f k8s/loki-dep.yaml -f k8s/loki-svc.yaml
-kubectl apply -f k8s/tempo-configmap.yaml -f k8s/tempo-dep.yaml -f k8s/tempo-svc.yaml
-kubectl apply -f k8s/grafana-datasources-cm.yaml -f k8s/grafana-dashboard-provider-cm.yaml -f k8s/grafana-dashboard-cm.yaml -f k8s/grafana-dep.yaml -f k8s/grafana-svc.yaml -f k8s/grafana-ingress.yaml
-kubectl apply -f k8s/api-dep.yaml -f k8s/api-svc.yaml
-kubectl apply -f k8s/web-dep.yaml -f k8s/web-svc.yaml -f k8s/web-ingress.yaml
+kubectl apply -f deploy/k8s/base/namespace.yaml
+kubectl apply -f deploy/k8s/data/postgres-pvc.yaml -f deploy/k8s/data/postgres-dep.yaml -f deploy/k8s/data/postgres-svc.yaml
+kubectl apply -f deploy/k8s/observability/otel-collector-configmap.yaml -f deploy/k8s/observability/otel-collector-dep.yaml -f deploy/k8s/observability/otel-collector-svc.yaml
+kubectl apply -f deploy/k8s/observability/prometheus-configmap.yaml -f deploy/k8s/observability/prometheus-dep.yaml -f deploy/k8s/observability/prometheus-svc.yaml -f deploy/k8s/observability/prometheus-ingress.yaml
+kubectl apply -f deploy/k8s/observability/loki-configmap.yaml -f deploy/k8s/observability/loki-dep.yaml -f deploy/k8s/observability/loki-svc.yaml
+kubectl apply -f deploy/k8s/observability/tempo-configmap.yaml -f deploy/k8s/observability/tempo-dep.yaml -f deploy/k8s/observability/tempo-svc.yaml
+kubectl apply -f deploy/k8s/observability/grafana-datasources-cm.yaml -f deploy/k8s/observability/grafana-dashboard-provider-cm.yaml -f deploy/k8s/observability/grafana-dashboard-cm.yaml -f deploy/k8s/observability/grafana-dep.yaml -f deploy/k8s/observability/grafana-svc.yaml -f deploy/k8s/observability/grafana-ingress.yaml
+kubectl apply -f deploy/k8s/app/api-dep.yaml -f deploy/k8s/app/api-svc.yaml
+kubectl apply -f deploy/k8s/app/web-dep.yaml -f deploy/k8s/app/web-svc.yaml -f deploy/k8s/app/web-ingress.yaml
 ```
+
+### TLS Without cert-manager
+
+The web ingress is configured to terminate TLS with a normal Kubernetes TLS secret named `activor-duckdns-tls` and to redirect all HTTP traffic to HTTPS.
+
+Create the TLS secret yourself before applying the ingress. Example:
+
+```powershell
+kubectl create secret tls activor-duckdns-tls `
+  --cert=fullchain.pem `
+  --key=privkey.pem `
+  -n activitiesapp
+```
+
+After applying the manifests, verify TLS:
+
+```powershell
+kubectl get secret activor-duckdns-tls -n activitiesapp
+kubectl get ingress -n activitiesapp
+```
+
+Expected result:
+
+- `https://activor.duckdns.org` serves the certificate stored in `activor-duckdns-tls`
+- `http://activor.duckdns.org` redirects to `https://activor.duckdns.org`
+- Microsoft Entra sign-in uses `https://activor.duckdns.org/signin-oidc`
 
 Ingress hosts:
 
