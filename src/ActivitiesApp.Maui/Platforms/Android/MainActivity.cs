@@ -1,6 +1,8 @@
-﻿using Android.App;
+using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Microsoft.Identity.Client;
 
 namespace ActivitiesApp;
 
@@ -17,5 +19,11 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnResume();
         Platforms.Android.AuthParentActivityProvider.SetCurrentActivity(this);
+    }
+
+    protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+        AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(requestCode, resultCode, data);
     }
 }
