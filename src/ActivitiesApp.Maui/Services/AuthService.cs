@@ -21,7 +21,7 @@ public class AuthService
         _pca = PublicClientApplicationBuilder
             .Create(ClientId)
             .WithAuthority(Authority)
-            .WithRedirectUri($"msal{ClientId}://auth")
+            .WithRedirectUri(GetRedirectUri())
             .Build();
     }
 
@@ -29,9 +29,21 @@ public class AuthService
     {
         try
         {
-            _authResult = await _pca.AcquireTokenInteractive(Scopes)
-                .WithUseEmbeddedWebView(false)
-                .ExecuteAsync();
+            var interactiveRequest = _pca.AcquireTokenInteractive(Scopes);
+
+#if ANDROID
+            var activity = ActivitiesApp.Platforms.Android.AuthParentActivityProvider.CurrentActivity
+                ?? throw new InvalidOperationException("Android sign-in requires the current Activity before launching the browser.");
+
+            var useSystemBrowser = _pca.IsSystemWebViewAvailable();
+            interactiveRequest = interactiveRequest
+                .WithParentActivityOrWindow(activity)
+                .WithUseEmbeddedWebView(!useSystemBrowser);
+#else
+            interactiveRequest = interactiveRequest.WithUseEmbeddedWebView(false);
+#endif
+
+            _authResult = await interactiveRequest.ExecuteAsync();
             return true;
         }
         catch (MsalClientException ex) when (ex.ErrorCode == "authentication_canceled")
@@ -73,5 +85,14 @@ public class AuthService
     {
         var token = await GetTokenAsync();
         return token != null;
+    }
+
+    private static string GetRedirectUri()
+    {
+#if WINDOWS
+        return "http://localhost";
+#else
+        return $"msal{ClientId}://auth";
+#endif
     }
 }
