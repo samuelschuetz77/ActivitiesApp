@@ -130,14 +130,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
-        run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update && sudo apt-get install -y gh
-          fi
-
       - name: Set KUBECONFIG
         run: echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
@@ -222,17 +214,18 @@ jobs:
           kubectl rollout status deployment/activitiesapp-web --namespace=${{ env.NAMESPACE }} --timeout=120s
 
       - name: Post PR comment with URL
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ env.PR_NUMBER }} \
-            --body "**PR Environment deployed!**
-
-          **URL:** http://${{ env.PR_HOST }}
-
-          **Namespace:** \`${{ env.NAMESPACE }}\`
-          **API Image:** \`${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}\`
-          **Web Image:** \`${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}\`"
+          cat > /tmp/pr-comment.json <<'ENDJSON'
+          {
+            "body": "**PR Environment deployed!**\n\n**URL:** http://${{ env.PR_HOST }}\n\n**Namespace:** `${{ env.NAMESPACE }}`\n**API Image:** `${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}`\n**Web Image:** `${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}`"
+          }
+          ENDJSON
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
+            -d @/tmp/pr-comment.json
 
       - name: Post-deploy status
         if: always()
@@ -257,14 +250,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
-        run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update && sudo apt-get install -y gh
-          fi
-
       - name: Set KUBECONFIG
         run: echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
@@ -273,11 +258,13 @@ jobs:
           kubectl delete namespace ${{ env.NAMESPACE }} --ignore-not-found=true
 
       - name: Post teardown comment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ env.PR_NUMBER }} \
-            --body "**PR Environment torn down.** Namespace \`${{ env.NAMESPACE }}\` and all resources have been deleted."
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
+            -d '{"body":"**PR Environment torn down.** Namespace `${{ env.NAMESPACE }}` and all resources have been deleted."}'
 
   # ── Failure notification ──
 
