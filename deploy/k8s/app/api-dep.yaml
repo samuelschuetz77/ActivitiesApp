@@ -21,6 +21,8 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Production
+            - name: RUN_DB_MIGRATIONS_ON_STARTUP
+              value: "true"
             - name: DATABASE_PROVIDER
               value: Postgres
             - name: POSTGRES_HOST

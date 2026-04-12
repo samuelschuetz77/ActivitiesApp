@@ -92,7 +92,9 @@
             <label>Tag</label>
             <select class="filter-select" @bind="selectedCategory" @bind:after="ApplyFilters">
                 <option value="">All</option>
-                <option value="Food & Drink">Food & Drink</option>
+                <option value="Restaurant">Restaurant</option>
+                <option value="Fast Food">Fast Food</option>
+                <option value="Convenience Store">Convenience Store</option>
                 <option value="Attractions">Attractions</option>
                 <option value="Outdoors">Outdoors</option>
                 <option value="Arts & Culture">Arts & Culture</option>
@@ -405,7 +407,9 @@
         var firstTag = GetTagList(category).FirstOrDefault();
         return firstTag switch
         {
-            "Food & Drink" => "\ud83c\udf7d\ufe0f",
+            "Restaurant" => "\ud83c\udf7d\ufe0f",
+            "Fast Food" => "\ud83c\udf54",
+            "Convenience Store" => "\ud83c\udfe0",
             "Attractions" => "\u2b50",
             "Outdoors" => "\ud83c\udf32",
             "Arts & Culture" => "\ud83c\udfa8",

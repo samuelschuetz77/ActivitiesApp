@@ -19,11 +19,25 @@ public static class GooglePlaceTagMapper
         var tags = new List<TagDefinition>
         {
             new(
-                "Food & Drink",
+                "Restaurant",
                 "utensils",
                 "restaurant",
-                new HashSet<string> { "restaurant", "cafe", "bakery", "bar", "meal_takeaway" },
-                new HashSet<string> { "restaurant", "cafe", "bakery", "bar", "meal_delivery", "meal_takeaway", "liquor_store", "food" }),
+                new HashSet<string> { "restaurant", "cafe", "bakery" },
+                new HashSet<string> { "restaurant", "cafe", "bakery", "food" }),
+
+            new(
+                "Fast Food",
+                "burger",
+                "meal_takeaway",
+                new HashSet<string> { "meal_takeaway", "meal_delivery" },
+                new HashSet<string> { "meal_takeaway", "meal_delivery" }),
+
+            new(
+                "Convenience Store",
+                "store",
+                "convenience_store",
+                new HashSet<string> { "convenience_store", "supermarket" },
+                new HashSet<string> { "convenience_store", "supermarket" }),
 
             new(
                 "Outdoors",
@@ -44,7 +58,7 @@ public static class GooglePlaceTagMapper
                 "moon",
                 "night_club",
                 new HashSet<string> { "night_club", "bar", "casino" },
-                new HashSet<string> { "night_club", "bar", "casino" }),
+                new HashSet<string> { "night_club", "bar", "casino", "liquor_store" }),
 
             new(
                 "Fitness & Sports",
@@ -63,7 +77,7 @@ public static class GooglePlaceTagMapper
                     "shopping_mall", "clothing_store", "shoe_store", "jewelry_store",
                     "department_store", "book_store", "bicycle_store", "electronics_store",
                     "furniture_store", "home_goods_store", "pet_store", "florist",
-                    "convenience_store", "supermarket", "hardware_store"
+                    "hardware_store"
                 }),
 
             new(
