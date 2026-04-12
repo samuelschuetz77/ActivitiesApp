@@ -10,17 +10,31 @@ public class GooglePlaceTagMapperTests
     {
         var tags = GooglePlaceTagMapper.GetTags(["restaurant"]);
 
-        Assert.Contains("Food & Drink", tags);
+        Assert.Contains("Restaurant", tags);
     }
 
     [Fact]
-    public void GetTags_ReturnsMultipleTags_ForBar()
+    public void GetTags_ReturnsNightlife_ForBar()
     {
-        // A bar should map to both Food & Drink and Nightlife
         var tags = GooglePlaceTagMapper.GetTags(["bar"]);
 
-        Assert.Contains("Food & Drink", tags);
         Assert.Contains("Nightlife", tags);
+    }
+
+    [Fact]
+    public void GetTags_ReturnsFastFood_ForMealTakeaway()
+    {
+        var tags = GooglePlaceTagMapper.GetTags(["meal_takeaway"]);
+
+        Assert.Contains("Fast Food", tags);
+    }
+
+    [Fact]
+    public void GetTags_ReturnsConvenienceStore()
+    {
+        var tags = GooglePlaceTagMapper.GetTags(["convenience_store"]);
+
+        Assert.Contains("Convenience Store", tags);
     }
 
     [Fact]
@@ -55,11 +69,11 @@ public class GooglePlaceTagMapperTests
     [Fact]
     public void TryGetDefinition_IsCaseInsensitive()
     {
-        var found = GooglePlaceTagMapper.TryGetDefinition("food & drink", out var definition);
+        var found = GooglePlaceTagMapper.TryGetDefinition("restaurant", out var definition);
 
         Assert.True(found);
         Assert.NotNull(definition);
-        Assert.Equal("Food & Drink", definition.Name);
+        Assert.Equal("Restaurant", definition.Name);
     }
 
     [Fact]
@@ -73,7 +87,7 @@ public class GooglePlaceTagMapperTests
     [Fact]
     public void AllTags_ContainsExpectedCount()
     {
-        Assert.Equal(9, GooglePlaceTagMapper.AllTags.Count);
+        Assert.Equal(11, GooglePlaceTagMapper.AllTags.Count);
     }
 
     [Fact]

@@ -349,11 +349,13 @@ h1:focus {
     width: 100%;
     padding: 0.75rem 1rem;
     font-size: 1rem;
-    border: 2px solid #e0e0e0;
+    font-weight: 600;
+    border: 2.5px solid #1b6ec2;
     border-radius: 12px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
     background: #fafafa;
+    box-shadow: 0 2px 8px rgba(27, 110, 194, 0.10);
 }
 
 .search-input:focus {
@@ -402,6 +404,26 @@ h1:focus {
 .filter-select:focus {
     border-color: #1b6ec2;
 }
+
+/* Cards Carousel (horizontal scroll, e.g. Recently Viewed) */
+.cards-carousel {
+    display: flex;
+    gap: 1.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+}
+
+.cards-carousel .activity-card {
+    min-width: 260px;
+    max-width: 300px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+}
+
+.cards-carousel::-webkit-scrollbar { display: none; }
+.cards-carousel { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Cards Grid */
 .cards-grid {

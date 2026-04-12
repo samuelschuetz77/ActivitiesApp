@@ -48,7 +48,11 @@
       "Bash(python -c \"import sys, yaml; yaml.safe_load\\(sys.stdin\\); print\\('YAML is valid'\\)\")",
       "Bash(python3 -c \"import sys, yaml; yaml.safe_load\\(open\\('.github/workflows/pr-environment.yml'\\)\\); print\\('YAML is valid'\\)\")",
       "Bash(pip install:*)",
-      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/pr-environment.yml'\\)\\); print\\('YAML is valid'\\)\")"
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/pr-environment.yml'\\)\\); print\\('YAML is valid'\\)\")",
+      "Bash(kubectl get pods:*)",
+      "Bash(wsl kubectl:*)",
+      "Bash(wsl bash:*)",
+      "Bash(dotnet format:*)"
     ]
   }
 }
