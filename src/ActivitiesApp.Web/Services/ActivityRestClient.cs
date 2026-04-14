@@ -245,7 +245,7 @@ public class ActivityRestClient : IActivityService
 
     public async Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null)
     {
-        var cacheKey = tagName ?? "__all__";
+        var cacheKey = $"{radiusMeters}:{tagName ?? "__all__"}";
 
         // Invalidate cache if location moved significantly (~500m)
         if (Math.Abs(lat - _cachedLat) > 0.005 || Math.Abs(lng - _cachedLng) > 0.005)
@@ -260,8 +260,8 @@ public class ActivityRestClient : IActivityService
         // Return cached result if available (back-navigation, tag re-click)
         if (_discoverCache.TryGetValue(cacheKey, out var cached))
         {
-            _logger.LogInformation("REST DiscoverActivities cache hit: tag={Tag}, count={Count}, withImages={ImageCount}",
-                tagName ?? "", cached.Count, cached.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)));
+            _logger.LogInformation("REST DiscoverActivities cache hit: radius={Radius}, tag={Tag}, count={Count}, withImages={ImageCount}",
+                radiusMeters, tagName ?? "", cached.Count, cached.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)));
             return cached;
         }
 

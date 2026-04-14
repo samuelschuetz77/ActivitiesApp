@@ -4,16 +4,33 @@ namespace ActivitiesApp.Services;
 
 public class MauiLocationProvider : ILocationProvider
 {
-    public async Task<(double Latitude, double Longitude)> GetLocationAsync()
+    public async Task<LocationFetchResult> GetLocationAsync(CancellationToken cancellationToken = default)
     {
         var status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
         if (status != PermissionStatus.Granted)
-            throw new InvalidOperationException("Location permission was denied.");
+        {
+            return LocationFetchResult.Failure(
+                "permission_denied",
+                "Location permission was denied on this device.",
+                "device",
+                permissionState: status.ToString());
+        }
 
-        var location = await Geolocation.Default.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10)));
+        var location = await Geolocation.Default.GetLocationAsync(
+            new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10)));
         if (location is null)
-            throw new InvalidOperationException("Unable to get device location.");
+        {
+            return LocationFetchResult.Failure(
+                "device_location_unavailable",
+                "Unable to get device location.",
+                "device",
+                permissionState: status.ToString());
+        }
 
-        return (location.Latitude, location.Longitude);
+        return LocationFetchResult.Success(
+            location.Latitude,
+            location.Longitude,
+            "device",
+            status.ToString());
     }
 }

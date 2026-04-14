@@ -301,11 +301,13 @@ h1:focus {
     position: absolute;
     top: 50px;
     right: 0;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    padding: 0.85rem 1rem;
-    min-width: 240px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    border: 1px solid #dce6f2;
+    border-radius: 18px;
+    box-shadow: 0 22px 48px rgba(25, 45, 80, 0.18);
+    padding: 1rem;
+    min-width: 320px;
+    max-width: 360px;
     z-index: 100;
 }
 
@@ -323,7 +325,7 @@ h1:focus {
 
 .location-address {
     margin: 0 0 0.25rem 0;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: #333;
     line-height: 1.4;
@@ -339,6 +341,166 @@ h1:focus {
     font-size: 0.75rem;
     color: #999;
     font-family: monospace;
+}
+
+.location-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+}
+
+.location-panel-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #223046;
+}
+
+.location-panel-subtitle {
+    margin: 0.15rem 0 0 0;
+    color: #5f6c81;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.location-state-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    padding: 0.28rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.location-state-pill.active {
+    background: #e8f7ee;
+    color: #18794e;
+}
+
+.location-state-pill.inactive {
+    background: #edf1f5;
+    color: #5f6c81;
+}
+
+.location-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+    margin-bottom: 0.9rem;
+}
+
+.location-action-btn {
+    min-height: 42px;
+    border: 1px solid #d5dfe9;
+    border-radius: 12px;
+    background: #eef2f6;
+    color: #4f5d73;
+    font-size: 0.83rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.location-action-btn:hover {
+    transform: translateY(-1px);
+    border-color: #9cb6d1;
+}
+
+.location-action-btn.active {
+    border-color: #2a9d4e;
+    background: #edf9f0;
+    color: #1f7a3b;
+}
+
+.location-manual-card,
+.location-current-card,
+.location-error-card,
+.location-log-card {
+    border: 1px solid #dce6f2;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.8rem 0.85rem;
+    margin-top: 0.75rem;
+}
+
+.location-section-label {
+    display: block;
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #5f6c81;
+}
+
+.location-manual-active {
+    margin: 0.55rem 0 0 0;
+    color: #18794e;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.location-error-card {
+    border-color: #f2c6cc;
+    background: #fff6f7;
+}
+
+.location-error-title {
+    margin: 0 0 0.2rem 0;
+    color: #9f2736;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.location-error-message,
+.location-error-meta {
+    margin: 0.15rem 0 0 0;
+    color: #7f2b37;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.location-log-empty {
+    margin: 0.5rem 0 0 0;
+    color: #7b8798;
+    font-size: 0.8rem;
+}
+
+.location-log-entry + .location-log-entry {
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e7edf4;
+}
+
+.location-log-message,
+.location-log-meta,
+.location-log-details {
+    margin: 0;
+}
+
+.location-log-message {
+    font-size: 0.8rem;
+    color: #223046;
+    line-height: 1.35;
+}
+
+.location-log-meta {
+    margin-top: 0.18rem;
+    color: #7b8798;
+    font-size: 0.72rem;
+}
+
+.location-log-details {
+    margin-top: 0.18rem;
+    color: #5f6c81;
+    font-size: 0.74rem;
+    line-height: 1.35;
 }
 
 .search-container {
@@ -546,6 +708,15 @@ h1:focus {
 }
 
 @media (max-width: 640.98px) {
+    .location-popup {
+        right: -10px;
+        min-width: min(92vw, 340px);
+    }
+
+    .location-actions-grid {
+        grid-template-columns: 1fr;
+    }
+
     .tag-cards-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }

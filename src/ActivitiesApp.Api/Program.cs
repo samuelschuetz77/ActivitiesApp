@@ -400,9 +400,13 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
         }
     }
 
+    results = results
+        .Where(a => GeoMath.HaversineMeters(lat, lng, a.Latitude, a.Longitude) <= radius)
+        .ToList();
+
     // Sort by distance (closest first) and cap at 30 results
     results = results
-        .OrderBy(a => HaversineMeters(lat, lng, a.Latitude, a.Longitude))
+        .OrderBy(a => GeoMath.HaversineMeters(lat, lng, a.Latitude, a.Longitude))
         .Take(30)
         .ToList();
 
@@ -597,17 +601,6 @@ static string GetPreferredPlaceImageUrl(GooglePlacesService.NearbyPlace place)
 
     // No photo available from Nearby Search — return empty rather than triggering Place Details
     return "";
-}
-
-static double HaversineMeters(double lat1, double lng1, double lat2, double lng2)
-{
-    const double R = 6371000;
-    var dLat = (lat2 - lat1) * Math.PI / 180;
-    var dLng = (lng2 - lng1) * Math.PI / 180;
-    var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-            Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
-            Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-    return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 }
 
 static List<string> ValidateActivityForCreate(ActivitiesApp.Infrastructure.Models.Activity activity)

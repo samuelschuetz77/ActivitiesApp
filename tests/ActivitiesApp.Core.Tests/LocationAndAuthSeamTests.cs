@@ -18,11 +18,11 @@ public class LocationAndAuthSeamTests
         var changed = 0;
         service.LocationChanged += () => changed++;
 
-        await service.RefreshAsync();
+        await service.EnableTrackingAsync();
         await service.RefreshAsync();
         await service.RefreshAsync();
 
-        Assert.Equal(2, changed);
+        Assert.Equal(3, changed);
         Assert.True(service.HasLocation);
     }
 
@@ -34,7 +34,7 @@ public class LocationAndAuthSeamTests
         provider.EnqueueError("gps failed");
         var service = new LocationService(NullLogger<LocationService>.Instance, provider);
 
-        await service.RefreshAsync();
+        await service.EnableTrackingAsync();
         service.SetManualLocation(40, -105, "Manual");
         await service.RefreshAsync();
 
@@ -42,6 +42,23 @@ public class LocationAndAuthSeamTests
         Assert.False(service.HasLocation);
         Assert.Equal(40, service.ActiveLatitude);
         Assert.Equal("gps failed", service.LastError);
+    }
+
+    [Fact]
+    public async Task LocationService_DisableTrackingTurnsOffCurrentLocation_ButAllowsManualOverride()
+    {
+        var provider = new SequenceLocationProvider();
+        provider.Enqueue(39.7392, -104.9903);
+        var service = new LocationService(NullLogger<LocationService>.Instance, provider);
+
+        await service.EnableTrackingAsync();
+        service.SetManualLocation(40, -105, "Manual");
+        service.DisableTracking();
+
+        Assert.False(service.IsTrackingEnabled);
+        Assert.False(service.HasLocation);
+        Assert.True(service.HasManualLocation);
+        Assert.Equal(40, service.ActiveLatitude);
     }
 
     [Fact]

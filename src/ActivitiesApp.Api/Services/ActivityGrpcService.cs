@@ -565,30 +565,21 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         int radiusMeters,
         CancellationToken cancellationToken)
     {
-        var radiusMiles = radiusMeters / 1609.34;
+        var bounds = GeoMath.GetBoundingBox(latitude, longitude, radiusMeters);
         var candidates = await _db.Activities
             .AsNoTracking()
             .Where(a => !a.IsDeleted)
+            .Where(a =>
+                a.Latitude >= bounds.MinLatitude &&
+                a.Latitude <= bounds.MaxLatitude &&
+                a.Longitude >= bounds.MinLongitude &&
+                a.Longitude <= bounds.MaxLongitude)
             .ToListAsync(cancellationToken);
 
         return candidates
-            .Where(a => GetDistanceMiles(latitude, longitude, a.Latitude, a.Longitude) <= radiusMiles)
-            .OrderBy(a => GetDistanceMiles(latitude, longitude, a.Latitude, a.Longitude))
+            .Where(a => GeoMath.HaversineMeters(latitude, longitude, a.Latitude, a.Longitude) <= radiusMeters)
+            .OrderBy(a => GeoMath.HaversineMeters(latitude, longitude, a.Latitude, a.Longitude))
             .Take(50)
             .ToList();
     }
-
-    private static double GetDistanceMiles(double lat1, double lng1, double lat2, double lng2)
-    {
-        const double earthRadiusMiles = 3958.8;
-        var dLat = ToRadians(lat2 - lat1);
-        var dLng = ToRadians(lng2 - lng1);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return earthRadiusMiles * c;
-    }
-
-    private static double ToRadians(double degrees) => degrees * Math.PI / 180.0;
 }
