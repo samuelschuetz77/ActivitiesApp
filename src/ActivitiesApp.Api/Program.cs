@@ -264,17 +264,19 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName,
+app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName, string? searchTerm,
     IActivityDbContext db, GooglePlacesService places, IMemoryCache discoverCache, ILogger<Program> log) =>
 {
     var radius = radiusMeters ?? 16093;
     var discoverRequestId = Guid.NewGuid().ToString("N")[..8];
-    log.LogInformation("REST Discover {RequestId} started at ({Lat},{Lng}) radius={Radius}m tag={Tag}", discoverRequestId, lat, lng, radius, tagName ?? "");
+    log.LogInformation("REST Discover {RequestId} started at ({Lat},{Lng}) radius={Radius}m tag={Tag} searchTerm={SearchTerm}",
+        discoverRequestId, lat, lng, radius, tagName ?? "", searchTerm ?? "");
 
     // Server-side cache: quantize to ~1.1km grid to avoid redundant Google calls
     var gridLat = Math.Round(lat, 2);
     var gridLng = Math.Round(lng, 2);
-    var discoverCacheKey = $"discover:{gridLat}:{gridLng}:{radius}";
+    var normalizedSearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? "" : searchTerm.Trim();
+    var discoverCacheKey = $"discover:{gridLat}:{gridLng}:{radius}:{tagName ?? ""}:{normalizedSearchTerm}";
 
     List<GooglePlacesService.NearbyPlace> googlePlaces;
     try
@@ -289,7 +291,12 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
         else
         {
             // Single broad search (no type filter) to minimize API calls
-            googlePlaces = await places.SearchNearbyAsync(lat, lng, radius, type: null, keyword: null);
+            googlePlaces = await places.SearchNearbyAsync(
+                lat,
+                lng,
+                radius,
+                type: null,
+                keyword: string.IsNullOrWhiteSpace(normalizedSearchTerm) ? null : normalizedSearchTerm);
             discoverCache.Set(discoverCacheKey, googlePlaces, TimeSpan.FromMinutes(60));
             log.LogInformation("REST Discover {RequestId} cache MISS: broad search returned {Count} places, cached for 60min",
                 discoverRequestId, googlePlaces.Count);
@@ -305,7 +312,12 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
             {
                 log.LogInformation("REST Discover {RequestId} only {MatchCount} matches for tag {Tag}, doing targeted search with type={Type}",
                     discoverRequestId, matchCount, tagName, tagDef.PrimarySearchType);
-                var targeted = await places.SearchNearbyAsync(lat, lng, radius, type: tagDef.PrimarySearchType, keyword: null);
+                var targeted = await places.SearchNearbyAsync(
+                    lat,
+                    lng,
+                    radius,
+                    type: tagDef.PrimarySearchType,
+                    keyword: string.IsNullOrWhiteSpace(normalizedSearchTerm) ? null : normalizedSearchTerm);
                 // Merge and deduplicate by PlaceId
                 var deduped = googlePlaces.ToDictionary(p => p.PlaceId, p => p, StringComparer.Ordinal);
                 foreach (var p in targeted)
@@ -403,6 +415,17 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
     results = results
         .Where(a => GeoMath.HaversineMeters(lat, lng, a.Latitude, a.Longitude) <= radius)
         .ToList();
+
+    if (!string.IsNullOrWhiteSpace(normalizedSearchTerm))
+    {
+        results = results
+            .Where(a =>
+                (a.Name?.Contains(normalizedSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Description?.Contains(normalizedSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.City?.Contains(normalizedSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Category?.Contains(normalizedSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+    }
 
     // Sort by distance (closest first) and cap at 30 results
     results = results
@@ -560,6 +583,18 @@ static bool ApplyGooglePlaceData(
     if (!string.Equals(activity.Category, category, StringComparison.Ordinal))
     {
         activity.Category = category;
+        changed = true;
+    }
+
+    if (!string.Equals(activity.Name, place.Name, StringComparison.Ordinal))
+    {
+        activity.Name = place.Name;
+        changed = true;
+    }
+
+    if (!string.Equals(activity.City, place.Vicinity, StringComparison.Ordinal))
+    {
+        activity.City = place.Vicinity;
         changed = true;
     }
 

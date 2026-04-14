@@ -771,20 +771,11 @@
         return GetDistanceValue(activity).ToString("0.1");
     }
 
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
-
     private double GetDistanceValue(Activity activity)
     {
         if (!hasActiveLocation) return double.MaxValue;
 
-        const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - activeLat);
-        var dLng = ToRad(activity.Longitude - activeLng);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c;
+        return GeoMath.HaversineMiles(activeLat, activeLng, activity.Latitude, activity.Longitude);
     }
 
     // ─── Location Popup (kept from original) ───

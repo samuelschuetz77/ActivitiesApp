@@ -12,7 +12,7 @@
     <div class="search-row">
         <div class="search-container">
             <input type="text" class="search-input" placeholder="Search activities..."
-                   @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
+                   @bind="searchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
         </div>
         <div class="location-icon-wrapper">
             <button class="location-btn @(LocationService.HasActiveLocation ? "active" : "")"
@@ -198,7 +198,14 @@
     }
     else if (filteredActivities != null && !filteredActivities.Any())
     {
-        <div class="no-results">No activities found matching your filters.</div>
+        <div class="location-error-card">
+            <p class="location-error-title">@emptyStateTitle</p>
+            <p class="location-error-message">@emptyStateDetail</p>
+            @foreach (var reason in emptyStateReasons)
+            {
+                <p class="location-error-meta">- @reason</p>
+            }
+        </div>
     }
     else if (filteredActivities != null)
     {
@@ -241,7 +248,7 @@
                         </div>
                         <div class="card-details">
                             <span class="card-cost">@FormatCost(activity.Cost)</span>
-                            <span class="card-distance">@GetDistance(activity) mi</span>
+                            <span class="card-distance" title="@GetDistanceDebugLabel(activity)">@GetDistance(activity) mi</span>
                         </div>
                     </div>
                 </div>
@@ -252,6 +259,7 @@
 
 @code {
     private List<Activity>? allActivities;
+    private List<Activity>? defaultActivities;
     private List<Activity>? filteredActivities;
 
     private string searchText = "";
@@ -268,6 +276,11 @@
     private string? displayAddress;
     private string? manualLocationStatus;
     private bool isApplyingManualLocation;
+    private bool isRemoteSearchLoading;
+    private string emptyStateTitle = "No activities matched the current filters.";
+    private string emptyStateDetail = "The current result set did not contain anything that survived every filter.";
+    private List<string> emptyStateReasons = [];
+    private readonly HashSet<string> _distanceDebugKeys = [];
     private string _lastAppliedLocationSignature = "";
     private string? _lastReverseGeocodeSignature;
 
@@ -316,7 +329,11 @@
     {
         await InvokeAsync(async () =>
         {
-            allActivities = await ActivityService.ListActivitiesAsync();
+            defaultActivities = await ActivityService.ListActivitiesAsync();
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                allActivities = defaultActivities;
+            }
             ApplyFilters();
         });
     }
@@ -338,7 +355,8 @@
             {
                 statusMessage = "Loading saved activities from the database...";
                 StateHasChanged();
-                allActivities = await ActivityService.ListActivitiesAsync();
+                defaultActivities = await ActivityService.ListActivitiesAsync();
+                allActivities = defaultActivities;
                 statusMessage = null;
                 statusDetail = null;
                 ApplyFilters();
@@ -375,14 +393,83 @@
             selectedRadius,
             LocationService.HasManualLocation ? "manual" : "current");
 
-        allActivities = await ActivityService.DiscoverActivitiesAsync(
+        defaultActivities = await ActivityService.DiscoverActivitiesAsync(
             LocationService.ActiveLatitude,
             LocationService.ActiveLongitude,
             radiusMeters);
+        allActivities = defaultActivities;
 
         statusMessage = null;
         statusDetail = null;
         ApplyFilters();
+    }
+
+    private async Task OnSearchChangedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            allActivities = defaultActivities;
+            statusMessage = null;
+            statusDetail = null;
+            ApplyFilters();
+            return;
+        }
+
+        allActivities = defaultActivities;
+        ApplyFilters();
+        if (filteredActivities != null && filteredActivities.Count > 0)
+        {
+            return;
+        }
+
+        if (!LocationService.HasActiveLocation)
+        {
+            ApplyFilters();
+            return;
+        }
+
+        var term = searchText.Trim();
+        if (term.Length < 2)
+        {
+            ApplyFilters();
+            return;
+        }
+
+        await RunRemoteSearchAsync(term);
+    }
+
+    private async Task RunRemoteSearchAsync(string term)
+    {
+        try
+        {
+            isRemoteSearchLoading = true;
+            statusMessage = $"Searching for \"{term}\"...";
+            statusDetail = "The page is asking the API for keyword matches near the current location.";
+            StateHasChanged();
+
+            var radiusMeters = (int)(selectedRadius * 1609.34);
+            var results = await ActivityService.SearchActivitiesAsync(
+                LocationService.ActiveLatitude,
+                LocationService.ActiveLongitude,
+                radiusMeters,
+                term);
+
+            allActivities = results;
+            Logger.LogInformation(
+                "Activities page remote search completed: term={Term}, resultCount={ResultCount}, radius={Radius}, activeLat={Lat}, activeLng={Lng}",
+                term, results.Count, selectedRadius, LocationService.ActiveLatitude, LocationService.ActiveLongitude);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Activities page remote search failed for {Term}", term);
+            statusDetail = ex.Message;
+        }
+        finally
+        {
+            isRemoteSearchLoading = false;
+            statusMessage = null;
+            ApplyFilters();
+        }
     }
 
     private async Task OnRadiusChanged()
@@ -404,38 +491,48 @@
             return;
         }
 
-        var query = allActivities.AsEnumerable();
+        var workingSet = allActivities.AsEnumerable();
+        var initialCount = workingSet.Count();
+        var searchCount = initialCount;
+        var costCount = initialCount;
+        var categoryCount = initialCount;
+        var distanceCount = initialCount;
+        var ageCount = initialCount;
 
         if (!string.IsNullOrWhiteSpace(searchText))
         {
             var term = searchText.Trim();
-            query = query.Where(a =>
+            workingSet = workingSet.Where(a =>
                 (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+            searchCount = workingSet.Count();
         }
 
         if (!string.IsNullOrEmpty(selectedCost))
         {
-            query = selectedCost switch
+            workingSet = selectedCost switch
             {
-                "free" => query.Where(a => a.Cost == 0),
-                "$" => query.Where(a => a.Cost >= 0 && a.Cost < 15),
-                "$$" => query.Where(a => a.Cost >= 15 && a.Cost <= 50),
-                "$$$" => query.Where(a => a.Cost > 50),
-                _ => query
+                "free" => workingSet.Where(a => a.Cost == 0),
+                "$" => workingSet.Where(a => a.Cost >= 0 && a.Cost < 15),
+                "$$" => workingSet.Where(a => a.Cost >= 15 && a.Cost <= 50),
+                "$$$" => workingSet.Where(a => a.Cost > 50),
+                _ => workingSet
             };
+            costCount = workingSet.Count();
         }
 
         if (!string.IsNullOrEmpty(selectedCategory))
         {
-            query = query.Where(a => HasTag(a.Category, selectedCategory));
+            workingSet = workingSet.Where(a => HasTag(a.Category, selectedCategory));
+            categoryCount = workingSet.Count();
         }
 
         if (LocationService.HasActiveLocation)
         {
-            query = query.Where(a => GetDistanceValue(a) <= selectedRadius);
+            workingSet = workingSet.Where(a => GetDistanceValue(a) <= selectedRadius);
+            distanceCount = workingSet.Count();
         }
 
         if (!string.IsNullOrEmpty(selectedAgeRange))
@@ -443,11 +540,14 @@
             var parts = selectedAgeRange.Split('-');
             if (parts.Length == 2 && int.TryParse(parts[0], out var minAge) && int.TryParse(parts[1], out var maxAge))
             {
-                query = query.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
+                workingSet = workingSet.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
             }
         }
 
-        filteredActivities = query.ToList();
+        filteredActivities = workingSet.ToList();
+        ageCount = filteredActivities.Count;
+        UpdateEmptyState(initialCount, searchCount, costCount, categoryCount, distanceCount, ageCount);
+        LogVisibleDistanceDiagnostics();
         StateHasChanged();
     }
 
@@ -482,6 +582,17 @@
 
     private string GetDistance(Activity activity) =>
         LocationService.HasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
+
+    private string GetDistanceDebugLabel(Activity activity)
+    {
+        if (!LocationService.HasActiveLocation)
+        {
+            return "No active location";
+        }
+
+        var miles = GetDistanceValue(activity);
+        return $"from {LocationService.ActiveLatitude:0.0000},{LocationService.ActiveLongitude:0.0000} to {activity.Latitude:0.0000},{activity.Longitude:0.0000} = {miles:0.000} mi";
+    }
 
     private static List<string> GetTagList(string? category)
     {
@@ -612,6 +723,66 @@
         {
             isApplyingManualLocation = false;
             StateHasChanged();
+        }
+    }
+
+    private void UpdateEmptyState(int initialCount, int searchCount, int costCount, int categoryCount, int distanceCount, int ageCount)
+    {
+        if (filteredActivities == null || filteredActivities.Count > 0)
+        {
+            emptyStateTitle = "No activities matched the current filters.";
+            emptyStateDetail = "The current result set did not contain anything that survived every filter.";
+            emptyStateReasons = [];
+            return;
+        }
+
+        emptyStateTitle = "No activities are visible right now.";
+        emptyStateDetail = "The page loaded data, but one or more filters reduced the visible cards to zero.";
+        emptyStateReasons =
+        [
+            initialCount == 0 ? "The base activity payload was empty before text filtering even started." : $"The base activity payload contained {initialCount} cards.",
+            !string.IsNullOrWhiteSpace(searchText) ? $"Text search \"{searchText.Trim()}\" reduced the set to {searchCount} cards." : "No text search is active.",
+            !string.IsNullOrEmpty(selectedCost) ? $"The cost filter reduced the set to {costCount} cards." : "No cost filter is active.",
+            !string.IsNullOrEmpty(selectedCategory) ? $"The category filter reduced the set to {categoryCount} cards." : "No category filter is active.",
+            LocationService.HasActiveLocation ? $"The {selectedRadius} mile distance filter reduced the set to {distanceCount} cards." : "No active location means no distance filter was applied.",
+            !string.IsNullOrEmpty(selectedAgeRange) ? $"The age-range filter reduced the set to {ageCount} cards." : "No age-range filter is active.",
+            isRemoteSearchLoading ? "A remote keyword search is still in progress." : "No remote keyword search is running.",
+            !string.IsNullOrWhiteSpace(statusDetail) ? $"Last status detail: {statusDetail}" : "No API status detail was captured.",
+            "If the text search finds nothing, the earlier nearby-discover payload may have omitted the place before text filtering began.",
+            "If distance values look wrong, compare the tooltip on the mileage text to confirm the exact coordinates used."
+        ];
+
+        Logger.LogWarning(
+            "Activities page empty state: initial={Initial}, search={Search}, cost={Cost}, category={Category}, distance={Distance}, age={Age}, searchText={SearchText}, selectedCategory={SelectedCategory}, radius={Radius}",
+            initialCount, searchCount, costCount, categoryCount, distanceCount, ageCount,
+            searchText ?? "", selectedCategory ?? "", selectedRadius);
+    }
+
+    private void LogVisibleDistanceDiagnostics()
+    {
+        if (!LocationService.HasActiveLocation || filteredActivities == null)
+        {
+            return;
+        }
+
+        foreach (var activity in filteredActivities.Take(20))
+        {
+            var miles = GetDistanceValue(activity);
+            var key = $"{GetLocationSignature()}|{activity.Id}|{activity.Latitude:0.000000}|{activity.Longitude:0.000000}|{miles:0.000}";
+            if (_distanceDebugKeys.Add(key))
+            {
+                Logger.LogInformation(
+                    "Activities page distance snapshot: activityId={ActivityId}, placeId={PlaceId}, name={Name}, city={City}, activeLat={ActiveLat}, activeLng={ActiveLng}, activityLat={ActivityLat}, activityLng={ActivityLng}, miles={Miles}",
+                    activity.Id,
+                    activity.PlaceId ?? "",
+                    activity.Name ?? "",
+                    activity.City ?? "",
+                    LocationService.ActiveLatitude,
+                    LocationService.ActiveLongitude,
+                    activity.Latitude,
+                    activity.Longitude,
+                    miles);
+            }
         }
     }
 

@@ -333,6 +333,22 @@ public class ActivityRestClient : IActivityService
         }
     }
 
+    public async Task<List<Activity>> SearchActivitiesAsync(double lat, double lng, int radiusMeters, string searchTerm)
+    {
+        _logger.LogInformation(
+            "REST SearchActivities at ({Lat},{Lng}) radius={Radius} term={Term}",
+            lat, lng, radiusMeters, searchTerm);
+
+        var result = NormalizeActivities(await _http.GetFromJsonAsync<List<Activity>>(
+            $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}&searchTerm={Uri.EscapeDataString(searchTerm)}") ?? []);
+
+        _logger.LogInformation(
+            "REST SearchActivities completed: term={Term}, count={Count}",
+            searchTerm, result.Count);
+
+        return result;
+    }
+
     public async Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode)
     {
         try

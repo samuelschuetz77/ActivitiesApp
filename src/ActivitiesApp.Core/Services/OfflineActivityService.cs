@@ -144,6 +144,51 @@ public class OfflineActivityService : IActivityService
         return cached;
     }
 
+    public async Task<List<Activity>> SearchActivitiesAsync(double lat, double lng, int radiusMeters, string searchTerm)
+    {
+        var radiusMiles = radiusMeters / 1609.34;
+        var term = searchTerm.Trim();
+
+        var cached = NormalizeActivities(_cache.GetAll())
+            .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
+            .Where(a =>
+                (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+        if (_networkStatus.HasInternet)
+        {
+            try
+            {
+                var activities = await _http.GetFromJsonAsync<List<Activity>>(
+                    $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}&searchTerm={Uri.EscapeDataString(term)}");
+
+                if (activities != null && activities.Count > 0)
+                {
+                    await _store.SaveActivitiesAsync(
+                        activities.Select(activity => ActivityMapping.ToLocalActivity(activity, SyncState.Synced)),
+                        CancellationToken.None);
+
+                    foreach (var refreshedActivity in activities)
+                    {
+                        _cache.AddOrUpdate(NormalizeActivity(refreshedActivity)!, suppressNotify: true);
+                    }
+
+                    DataChanged?.Invoke();
+                    return NormalizeActivities(activities);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SearchActivitiesAsync remote refresh failed for term {Term}", term);
+            }
+        }
+
+        return cached;
+    }
+
     public async Task<List<NearbyPlace>> SearchNearbyPlacesAsync(double lat, double lng, int radiusMeters, string? type = null, string? keyword = null)
     {
         if (!_networkStatus.HasInternet)
