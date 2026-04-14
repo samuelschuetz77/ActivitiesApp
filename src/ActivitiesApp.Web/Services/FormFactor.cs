@@ -13,4 +13,6 @@ public class FormFactor : IFormFactor
     {
         return Environment.OSVersion.ToString();
     }
+
+    public bool IsNative => false;
 }

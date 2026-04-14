@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ActivitiesApp.Core\ActivitiesApp.Core.csproj" />
     <ProjectReference Include="..\ActivitiesApp.ServiceDefaults\ActivitiesApp.ServiceDefaults.csproj" />
     <ProjectReference Include="..\ActivitiesApp.Shared\ActivitiesApp.Shared.csproj" />
   </ItemGroup>

@@ -1,14 +1,38 @@
 <Solution>
-  <Project Path="src/ActivitiesApp.Api/ActivitiesApp.Api.csproj" />
-  <Project Path="src/ActivitiesApp.AppHost/ActivitiesApp.AppHost.csproj" />
-  <Project Path="src/ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj" />
-  <Project Path="src/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj" />
-  <Project Path="src/ActivitiesApp.Web/ActivitiesApp.Web.csproj" />
-  <Project Path="src/ActivitiesApp.Maui/ActivitiesApp.csproj">
-    <Deploy Solution="Debug|*" />
+  <Project Path="src/ActivitiesApp.Api/ActivitiesApp.Api.csproj">
+    <Build Solution="Debug|*" Project="false" />
   </Project>
-  <Project Path="src/ActivitiesApp.Infrastructure/ActivitiesApp.Infrastructure.csproj" />
-  <Project Path="src/ActivitiesApp.Infrastructure.Migrations/ActivitiesApp.Infrastructure.Migrations.csproj" />
-  <Project Path="tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj" />
-  <Project Path="tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj" />
+  <Project Path="src/ActivitiesApp.AppHost/ActivitiesApp.AppHost.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Core/ActivitiesApp.Core.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Infrastructure.Migrations/ActivitiesApp.Infrastructure.Migrations.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Infrastructure/ActivitiesApp.Infrastructure.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Maui/ActivitiesApp.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="src/ActivitiesApp.Web/ActivitiesApp.Web.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="tests/ActivitiesApp.Core.Tests/ActivitiesApp.Core.Tests.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
 </Solution>

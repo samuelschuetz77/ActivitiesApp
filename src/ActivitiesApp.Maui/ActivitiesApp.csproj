@@ -79,6 +79,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ActivitiesApp.Core\ActivitiesApp.Core.csproj" />
     <ProjectReference Include="..\ActivitiesApp.Shared\ActivitiesApp.Shared.csproj" />
   </ItemGroup>
 
