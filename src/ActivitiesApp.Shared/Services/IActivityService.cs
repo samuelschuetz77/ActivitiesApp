@@ -27,3 +27,8 @@ public interface IActivityService
     // API quota status
     Task<QuotaStatusResponse?> GetQuotaStatusAsync() => Task.FromResult<QuotaStatusResponse?>(null);
 }
+
+public class CreateActivityException : Exception
+{
+    public CreateActivityException(string message, Exception? inner = null) : base(message, inner) { }
+}

@@ -34,24 +34,73 @@ public class ActivityRestClient : IActivityService
             "REST CreateActivity starting for Name={Name}, City={City}, Category={Category}",
             activity.Name ?? "", activity.City ?? "", activity.Category ?? "");
 
-        var token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope]);
+        string? token;
+        try
+        {
+            token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope]);
+        }
+        catch (MicrosoftIdentityWebChallengeUserException ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity token acquisition failed — user needs to re-authenticate");
+            throw new CreateActivityException("Your login session has expired. Please sign out and sign back in.", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity token acquisition failed unexpectedly");
+            throw new CreateActivityException($"Authentication error: unable to acquire access token. ({ex.GetType().Name}: {ex.Message})", ex);
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/activities");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = JsonContent.Create(activity);
-        var response = await _http.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
+
+        HttpResponseMessage response;
+        try
         {
-            var responseBody = await response.Content.ReadAsStringAsync();
-            _logger.LogError(
-                "REST CreateActivity failed with StatusCode={StatusCode} for Name={Name}, City={City}. Response={ResponseBody}",
-                (int)response.StatusCode, activity.Name ?? "", activity.City ?? "", responseBody);
+            response = await _http.SendAsync(request);
         }
-        response.EnsureSuccessStatusCode();
-        _logger.LogInformation(
-            "REST CreateActivity completed for Name={Name}, City={City}",
-            activity.Name ?? "", activity.City ?? "");
-        return (await response.Content.ReadFromJsonAsync<Activity>())!;
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity timed out for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            throw new CreateActivityException("Request timed out — the API server took too long to respond. Try again in a moment.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity network error for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            throw new CreateActivityException($"Network error — could not reach the API server. ({ex.Message})", ex);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _logger.LogInformation("REST CreateActivity completed for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            return (await response.Content.ReadFromJsonAsync<Activity>())!;
+        }
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        var statusCode = (int)response.StatusCode;
+        _logger.LogError(
+            "REST CreateActivity failed with StatusCode={StatusCode} for Name={Name}, City={City}. Response={ResponseBody}",
+            statusCode, activity.Name ?? "", activity.City ?? "", responseBody);
+
+        var message = statusCode switch
+        {
+            400 => $"Validation error (400): The server rejected the activity data. Response: {Truncate(responseBody, 200)}",
+            401 => "Authentication failed (401): Your access token was rejected by the API. Try signing out and back in.",
+            403 => "Access denied (403): Your account does not have permission to create activities.",
+            404 => "API endpoint not found (404): The create activity endpoint does not exist on the server. Check API deployment.",
+            409 => $"Conflict (409): A duplicate activity may already exist. Response: {Truncate(responseBody, 200)}",
+            413 => "Payload too large (413): The activity data (possibly images) exceeded the server's size limit.",
+            500 => $"Server error (500): The API crashed while saving. Response: {Truncate(responseBody, 200)}",
+            502 => "Bad gateway (502): The API server is unreachable or restarting. Try again in a minute.",
+            503 => "Service unavailable (503): The API is temporarily down (possibly redeploying). Try again shortly.",
+            _ => $"Unexpected error (HTTP {statusCode}): {Truncate(responseBody, 300)}"
+        };
+
+        throw new CreateActivityException(message);
     }
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength] + "...";
 
     public async Task<Activity?> GetActivityAsync(Guid id)
     {
@@ -219,3 +268,4 @@ public class ActivityRestClient : IActivityService
 
     private record ReverseGeocodeResult(string FormattedAddress);
 }
+
