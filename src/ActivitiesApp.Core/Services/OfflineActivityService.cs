@@ -197,12 +197,24 @@ public class OfflineActivityService : IActivityService
     {
         if (!_networkStatus.HasInternet)
         {
-            return null;
+            throw new InvalidOperationException("ZIP lookup is unavailable while the device is offline.");
         }
 
         try
         {
-            var result = await _http.GetFromJsonAsync<ZipLookupResult>($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            using var response = await _http.GetAsync($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"ZIP lookup failed with HTTP {(int)response.StatusCode}: {body}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<ZipLookupResult>();
             if (result != null)
             {
                 result.PostalCode = zipCode;
@@ -210,9 +222,13 @@ public class OfflineActivityService : IActivityService
 
             return result;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        catch (TaskCanceledException ex)
         {
-            return null;
+            throw new InvalidOperationException("ZIP lookup timed out while contacting the API.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"ZIP lookup network error: {ex.Message}", ex);
         }
     }
 

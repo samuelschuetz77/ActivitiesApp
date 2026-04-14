@@ -318,21 +318,52 @@ public class ActivityRestClient : IActivityService
 
     public async Task<string> ReverseGeocodeAsync(double lat, double lng)
     {
-        var result = await _http.GetFromJsonAsync<ReverseGeocodeResult>($"/api/geocode/reverse?lat={lat}&lng={lng}");
-        return result?.FormattedAddress ?? "Unknown location";
+        try
+        {
+            var result = await _http.GetFromJsonAsync<ReverseGeocodeResult>($"/api/geocode/reverse?lat={lat}&lng={lng}");
+            return result?.FormattedAddress ?? "Unknown location";
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new InvalidOperationException("Reverse geocoding timed out while contacting the API.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"Reverse geocoding network error: {ex.Message}", ex);
+        }
     }
 
     public async Task<ZipLookupResult?> LookupZipCodeAsync(string zipCode)
     {
         try
         {
-            var result = await _http.GetFromJsonAsync<ZipLookupResult>($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
-            if (result != null) result.PostalCode = zipCode;
+            using var response = await _http.GetAsync($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"ZIP lookup failed with HTTP {(int)response.StatusCode}: {Truncate(body, 180)}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<ZipLookupResult>();
+            if (result != null)
+            {
+                result.PostalCode = zipCode;
+            }
             return result;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (TaskCanceledException ex)
         {
-            return null;
+            throw new InvalidOperationException("ZIP lookup timed out while contacting the API.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"ZIP lookup network error: {ex.Message}", ex);
         }
     }
 
@@ -342,13 +373,29 @@ public class ActivityRestClient : IActivityService
     {
         try
         {
-            var result = await _http.GetFromJsonAsync<ZipLookupResult>(
-                $"/api/geocode/address?address={Uri.EscapeDataString(address)}");
+            using var response = await _http.GetAsync($"/api/geocode/address?address={Uri.EscapeDataString(address)}");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"Address lookup failed with HTTP {(int)response.StatusCode}: {Truncate(body, 180)}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<ZipLookupResult>();
             return result;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (TaskCanceledException ex)
         {
-            return null;
+            throw new InvalidOperationException("Address lookup timed out while contacting the API.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"Address lookup network error: {ex.Message}", ex);
         }
     }
 

@@ -81,7 +81,8 @@ public class OfflineActivityServiceTests
         var service = CreateService(store, cache, new FakeNetworkStatus(false), new FakeSyncClient(), _ => throw new InvalidOperationException("HTTP should not be called"));
 
         Assert.Equal("Unavailable offline", await service.ReverseGeocodeAsync(1, 2));
-        Assert.Null(await service.LookupZipCodeAsync("80014"));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.LookupZipCodeAsync("80014"));
+        Assert.Contains("offline", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(await service.SearchNearbyPlacesAsync(1, 2, 1000));
     }
 

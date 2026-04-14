@@ -53,9 +53,16 @@
                         <label class="location-section-label" for="zip-input">Use a ZIP code</label>
                         <div class="location-popup-edit">
                             <input id="zip-input" class="zip-input" placeholder="Enter ZIP code" maxlength="5"
+                                   disabled="@isApplyingManualLocation"
                                    @bind="locationInput" @bind:event="oninput" @onkeyup="OnLocationInputKeyUp" />
-                            <button class="zip-btn" @onclick="ApplyManualLocationAsync">Apply</button>
+                            <button class="zip-btn" disabled="@isApplyingManualLocation" @onclick="ApplyManualLocationAsync">
+                                @(isApplyingManualLocation ? "Applying..." : "Apply")
+                            </button>
                         </div>
+                        @if (!string.IsNullOrWhiteSpace(manualLocationStatus))
+                        {
+                            <p class="location-log-meta">@manualLocationStatus</p>
+                        }
                         @if (LocationService.HasManualLocation)
                         {
                             <p class="location-manual-active">ZIP override: @LocationService.ManualLocationLabel</p>
@@ -259,6 +266,8 @@
     private string locationInput = "";
     private string? locationError;
     private string? displayAddress;
+    private string? manualLocationStatus;
+    private bool isApplyingManualLocation;
     private string _lastAppliedLocationSignature = "";
     private string? _lastReverseGeocodeSignature;
 
@@ -564,6 +573,7 @@
     private async Task ApplyManualLocationAsync()
     {
         locationError = null;
+        manualLocationStatus = null;
         var input = (locationInput ?? string.Empty).Trim();
         if (input.Length != 5 || !input.All(char.IsDigit))
         {
@@ -573,23 +583,35 @@
 
         try
         {
+            isApplyingManualLocation = true;
+            manualLocationStatus = $"Looking up ZIP {input}...";
+            StateHasChanged();
+
             var lookup = await ActivityService.LookupZipCodeAsync(input);
             if (lookup == null)
             {
                 locationError = "ZIP code not found.";
+                manualLocationStatus = $"ZIP {input} did not return a geocoding result.";
                 return;
             }
 
             LocationService.SetManualLocation(lookup.Latitude, lookup.Longitude, lookup.FormattedAddress);
             displayAddress = lookup.FormattedAddress;
             showLocationPopup = true;
+            manualLocationStatus = $"ZIP {input} resolved to {lookup.FormattedAddress}.";
             Logger.LogInformation("Activities page manual location set to ZIP {Zip}", input);
             await LoadActivities(forceReload: true);
         }
         catch (Exception ex)
         {
-            locationError = $"ZIP lookup failed: {ex.Message}";
+            locationError = ex.Message;
+            manualLocationStatus = $"ZIP {input} lookup failed.";
             Logger.LogError(ex, "Activities page location lookup failed for {Input}", input);
+        }
+        finally
+        {
+            isApplyingManualLocation = false;
+            StateHasChanged();
         }
     }
 
