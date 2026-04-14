@@ -147,25 +147,45 @@ jobs:
 
       - name: Register redirect URI with Azure AD
         run: |
+          set -x
           NEW_URI="http://${{ env.PR_HOST }}/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
 
-          TOKEN=$(curl -sf -X POST \
+          echo "::group::Step 1 - Acquire token"
+          TOKEN_HTTP_CODE=$(curl -s -o /tmp/token_response.json -w "%{http_code}" -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
-            | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials")
+          echo "Token HTTP status: $TOKEN_HTTP_CODE"
+          if [ "$TOKEN_HTTP_CODE" != "200" ]; then
+            echo "::error::Token request failed with HTTP $TOKEN_HTTP_CODE"
+            cat /tmp/token_response.json
+            exit 1
+          fi
+          TOKEN=$(grep -o '"access_token":"[^"]*"' /tmp/token_response.json | cut -d'"' -f4)
+          echo "Token acquired: ${TOKEN:+yes (${#TOKEN} chars)}${TOKEN:-NO}"
+          echo "::endgroup::"
 
-          APP=$(curl -sf \
+          echo "::group::Step 2 - Fetch app registration"
+          APP_HTTP_CODE=$(curl -s -o /tmp/app_response.json -w "%{http_code}" \
             "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
             -H "Authorization: Bearer $TOKEN")
-          OBJECT_ID=$(printf '%s' "$APP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-          CURRENT_URIS=$(printf '%s' "$APP" | grep -o '"redirectUris":\[[^]]*\]' | sed 's/"redirectUris"://')
+          echo "App HTTP status: $APP_HTTP_CODE"
+          if [ "$APP_HTTP_CODE" != "200" ]; then
+            echo "::error::App fetch failed with HTTP $APP_HTTP_CODE"
+            cat /tmp/app_response.json
+            exit 1
+          fi
+          OBJECT_ID=$(grep -o '"id":"[^"]*"' /tmp/app_response.json | head -1 | cut -d'"' -f4)
+          CURRENT_URIS=$(grep -o '"redirectUris":\[[^]]*\]' /tmp/app_response.json | sed 's/"redirectUris"://')
+          echo "Object ID: $OBJECT_ID"
+          echo "Current URIs: $CURRENT_URIS"
+          echo "::endgroup::"
 
-          # Add new URI if not already present, rebuild the JSON array
+          echo "::group::Step 3 - Build updated URI list"
           if printf '%s' "$CURRENT_URIS" | grep -q "$NEW_URI"; then
             UPDATED="$CURRENT_URIS"
+            echo "URI already registered, no change needed"
           else
-            # Strip trailing ] and append the new URI
             UPDATED=$(printf '%s' "$CURRENT_URIS" | sed 's/\]$//')
             if [ "$UPDATED" = "[" ]; then
               UPDATED="[\"$NEW_URI\"]"
@@ -173,13 +193,23 @@ jobs:
               UPDATED="${UPDATED},\"${NEW_URI}\"]"
             fi
           fi
+          echo "Updated URIs: $UPDATED"
+          echo "::endgroup::"
 
-          curl -sf -X PATCH \
+          echo "::group::Step 4 - Patch app registration"
+          PATCH_HTTP_CODE=$(curl -s -o /tmp/patch_response.json -w "%{http_code}" -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"web\":{\"redirectUris\":$UPDATED}}"
+            -d "{\"web\":{\"redirectUris\":$UPDATED}}")
+          echo "Patch HTTP status: $PATCH_HTTP_CODE"
+          if [ "$PATCH_HTTP_CODE" != "204" ] && [ "$PATCH_HTTP_CODE" != "200" ]; then
+            echo "::error::Patch failed with HTTP $PATCH_HTTP_CODE"
+            cat /tmp/patch_response.json
+            exit 1
+          fi
           echo "Registered: $NEW_URI"
+          echo "::endgroup::"
 
       - name: Create secrets
         run: |
