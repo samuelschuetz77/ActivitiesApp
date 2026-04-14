@@ -52,7 +52,16 @@
       "Bash(kubectl get pods:*)",
       "Bash(wsl kubectl:*)",
       "Bash(wsl bash:*)",
-      "Bash(dotnet format:*)"
+      "Bash(dotnet format:*)",
+      "Bash(ls src/ActivitiesApp.Infrastructure.Migrations/Migrations/*.cs)",
+      "Bash(gh run:*)",
+      "mcp__azure-mcp__appservice",
+      "Bash(az webapp config appsettings:*)",
+      "Bash(az account show:*)",
+      "Bash(az group list:*)",
+      "Bash(az webapp list:*)",
+      "Bash(az webapp:*)",
+      "Bash(curl:*)"
     ]
   }
 }

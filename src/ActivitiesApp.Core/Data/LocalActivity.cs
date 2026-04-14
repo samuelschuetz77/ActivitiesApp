@@ -1,5 +1,3 @@
-using System;
-
 namespace ActivitiesApp.Data;
 
 public enum SyncState

@@ -2,7 +2,7 @@ using Microsoft.Identity.Client;
 
 namespace ActivitiesApp.Services;
 
-public class AuthService
+public class AuthService : IAccessTokenProvider
 {
     private const string ClientId = "6d3dc4ee-33ce-4656-95c8-702a38464687";
     private const string TenantId = "common";
