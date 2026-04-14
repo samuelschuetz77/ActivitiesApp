@@ -85,7 +85,7 @@ public class ActivityRestClient : IActivityService
         var message = statusCode switch
         {
             400 => $"Validation error (400): The server rejected the activity data. Response: {Truncate(responseBody, 200)}",
-            401 => "Authentication failed (401): Your access token was rejected by the API. Try signing out and back in.",
+            401 => Diagnose401(response, responseBody),
             403 => "Access denied (403): Your account does not have permission to create activities.",
             404 => "API endpoint not found (404): The create activity endpoint does not exist on the server. Check API deployment.",
             409 => $"Conflict (409): A duplicate activity may already exist. Response: {Truncate(responseBody, 200)}",
@@ -97,6 +97,69 @@ public class ActivityRestClient : IActivityService
         };
 
         throw new CreateActivityException(message);
+    }
+
+    // Parses the WWW-Authenticate header and response body from the API's 401 to give a specific diagnosis.
+    // The Microsoft JWT bearer middleware always populates WWW-Authenticate with error/error_description.
+    private static string Diagnose401(HttpResponseMessage response, string responseBody)
+    {
+        var wwwAuth = response.Headers.WwwAuthenticate.ToString();
+        var desc = ExtractWwwAuthParam(wwwAuth, "error_description");
+        var error = ExtractWwwAuthParam(wwwAuth, "error");
+        var body = Truncate(responseBody.Trim(), 300);
+
+        // 1. Token completely absent — no Authorization header reached the API
+        if (string.IsNullOrEmpty(wwwAuth) && string.IsNullOrEmpty(responseBody))
+            return "401 — No token reached the API. The Bearer token may have been stripped by a reverse proxy or the MSAL silent-refresh returned null. Check ActivityRestClient logs for 'token acquisition'.";
+
+        // 2. Token expired (most common in long Blazor sessions)
+        if (desc.Contains("lifetime", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("expired", StringComparison.OrdinalIgnoreCase) ||
+            error == "invalid_token" && desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) is false && desc.Contains("expir", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Token expired. The access token's lifetime has passed. MSAL should refresh it automatically; if this keeps happening the token cache may be corrupted — sign out and back in. API said: {desc}";
+
+        // 3. Wrong audience — token was issued for a different app registration
+        if (desc.Contains("audience", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("aud", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Wrong audience. The token's 'aud' claim doesn't match the API's expected audience (api://6d3dc4ee-33ce-4656-95c8-702a38464687). The Web app may be requesting the wrong scope or the API app registration 'Expose an API' URI is misconfigured. API said: {desc}";
+
+        // 4. Wrong issuer / tenant mismatch
+        if (desc.Contains("issuer", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("iss", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("tenant", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Issuer/tenant mismatch. The token was issued by a different Entra ID tenant than the API expects. API TenantId is 'common' (multi-tenant) but the token issuer didn't match. API said: {desc}";
+
+        // 5. Signature validation failed — token tampered or signed with old key
+        if (desc.Contains("signature", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10503", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10511", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Token signature invalid. The JWT signature failed verification. This can happen if the signing keys rotated and the API hasn't refreshed them yet (usually auto-heals within minutes), or if the token was tampered. API said: {desc}";
+
+        // 6. Token not yet valid (nbf claim in the future — clock skew)
+        if (desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("not before", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10501", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Token 'not before' (nbf) is in the future. Server clock skew between the Entra ID token issuer and the API host. Usually self-corrects; if consistent, check the API App Service time zone config. API said: {desc}";
+
+        // 7. No Bearer scheme / malformed Authorization header
+        if (error == "invalid_request" ||
+            desc.Contains("malformed", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("invalid header", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Malformed Authorization header. The token was sent but the 'Bearer' scheme or token format was rejected by the API. API said: {desc}. Body: {body}";
+
+        // 8. Catch-all: include the full WWW-Authenticate and body for debugging
+        return $"401 — Token rejected (unrecognized reason). WWW-Authenticate: [{wwwAuth}]. Body: [{body}]. Check API logs for the JWT validation exception (search 'IDX' error codes).";
+    }
+
+    private static string ExtractWwwAuthParam(string header, string param)
+    {
+        // Parses: Bearer error="...", error_description="..."
+        var key = param + "=\"";
+        var start = header.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return string.Empty;
+        start += key.Length;
+        var end = header.IndexOf('"', start);
+        return end < 0 ? string.Empty : header[start..end];
     }
 
     private static string Truncate(string value, int maxLength)
