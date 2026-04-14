@@ -149,19 +149,20 @@ jobs:
         run: |
           NEW_URI="http://${{ env.PR_HOST }}/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
+          export NEW_URI
 
-          TOKEN=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sf -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
-            | jq -r '.access_token')
+          )
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; print(json.load(sys.stdin)['access_token'])")
 
           APP=$(curl -sf \
             "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
             -H "Authorization: Bearer $TOKEN")
-          OBJECT_ID=$(echo "$APP" | jq -r '.value[0].id')
-          CURRENT_URIS=$(echo "$APP" | jq '.value[0].web.redirectUris')
+          OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
+          UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=sorted(set(uris + [os.environ['NEW_URI']])); print(json.dumps(uris))")
 
-          UPDATED=$(echo "$CURRENT_URIS" | jq --arg uri "$NEW_URI" '. + [$uri] | unique')
           curl -sf -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
@@ -288,17 +289,19 @@ jobs:
         run: |
           REMOVE_URI="http://pr-${{ env.PR_NUMBER }}.activor.duckdns.org/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
+          export REMOVE_URI
 
-          TOKEN=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sf -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
-            | jq -r '.access_token')
+          )
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; print(json.load(sys.stdin)['access_token'])")
 
           APP=$(curl -sf \
             "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
             -H "Authorization: Bearer $TOKEN")
-          OBJECT_ID=$(echo "$APP" | jq -r '.value[0].id')
-          UPDATED=$(echo "$APP" | jq --arg uri "$REMOVE_URI" '.value[0].web.redirectUris | map(select(. != $uri))')
+          OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
+          UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=[uri for uri in uris if uri != os.environ['REMOVE_URI']]; print(json.dumps(uris))")
 
           curl -sf -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
