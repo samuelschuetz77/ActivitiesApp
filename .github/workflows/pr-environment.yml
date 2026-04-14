@@ -152,7 +152,7 @@ jobs:
 
           TOKEN=$(curl -sf -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
+            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
             | jq -r '.access_token')
 
           APP=$(curl -sf \
@@ -207,8 +207,8 @@ jobs:
             annotations:
               nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
               nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-              nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-              nginx.ingress.kubernetes.io/ssl-redirect: "false"
+              +
+              
               nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
           spec:
             ingressClassName: nginx
@@ -291,7 +291,7 @@ jobs:
 
           TOKEN=$(curl -sf -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
+            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
             | jq -r '.access_token')
 
           APP=$(curl -sf \
