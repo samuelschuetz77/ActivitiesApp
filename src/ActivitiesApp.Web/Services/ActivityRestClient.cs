@@ -38,6 +38,21 @@ public class ActivityRestClient : IActivityService
         try
         {
             token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope]);
+            LogTokenDiagnostics(token, "initial");
+
+            // If the token has no audience or wrong audience, force-refresh once to bypass stale cache
+            if (TokenHasWrongAudience(token))
+            {
+                _logger.LogWarning("Token has wrong/missing audience — forcing refresh for scope {Scope}", ApiScope);
+                token = await _tokenAcquisition.GetAccessTokenForUserAsync(
+                    [ApiScope],
+                    tokenAcquisitionOptions: new TokenAcquisitionOptions { ForceRefresh = true });
+                LogTokenDiagnostics(token, "force-refreshed");
+            }
+        }
+        catch (CreateActivityException)
+        {
+            throw;
         }
         catch (MicrosoftIdentityWebChallengeUserException ex)
         {
@@ -97,6 +112,47 @@ public class ActivityRestClient : IActivityService
         };
 
         throw new CreateActivityException(message);
+    }
+
+    private void LogTokenDiagnostics(string token, string phase)
+    {
+        try
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (!handler.CanReadToken(token))
+            {
+                _logger.LogWarning("Token ({Phase}) cannot be parsed as JWT. Length={Len}", phase, token?.Length ?? 0);
+                return;
+            }
+            var jwt = handler.ReadJwtToken(token);
+            var audiences = string.Join(",", jwt.Audiences);
+            _logger.LogWarning(
+                "Token ({Phase}) claims: aud=[{Aud}], iss={Iss}, exp={Exp}, sub={Sub}",
+                phase,
+                string.IsNullOrEmpty(audiences) ? "(none)" : audiences,
+                jwt.Issuer,
+                jwt.ValidTo.ToString("u"),
+                jwt.Subject);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Token ({Phase}) decode failed", phase);
+        }
+    }
+
+    private static bool TokenHasWrongAudience(string token)
+    {
+        try
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (!handler.CanReadToken(token)) return true;
+            var jwt = handler.ReadJwtToken(token);
+            return !jwt.Audiences.Any(a => a.Contains("6d3dc4ee-33ce-4656-95c8-702a38464687", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false; // don't force-refresh if we can't decode
+        }
     }
 
     // Parses the WWW-Authenticate header and response body to give a specific 401 diagnosis.
