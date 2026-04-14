@@ -76,7 +76,7 @@
     <!-- Search Bar -->
     <div class="search-container">
         <input type="text" class="search-input" placeholder="Search activities..."
-               @bind="searchText" @bind:event="oninput" />
+               value="@searchText" @oninput="OnSearchInput" />
     </div>
 
     <!-- Quota Warning Banner -->
@@ -134,6 +134,68 @@
         </div>
     }
 
+    <!-- Search Results Section -->
+    @if (!string.IsNullOrWhiteSpace(searchText) && searchResults != null)
+    {
+        <div class="home-section" id="search-results">
+            <div class="search-results-header">
+                <h2 class="home-section-title">Search Results</h2>
+                <span class="search-results-count">@searchResults.Count result@(searchResults.Count == 1 ? "" : "s")</span>
+            </div>
+
+            @if (!searchResults.Any())
+            {
+                <div class="no-results">No activities match your search.</div>
+            }
+            else
+            {
+                <div class="cards-grid">
+                    @foreach (var scored in searchResults)
+                    {
+                        var activity = scored.Activity;
+                        <div class="activity-card" @onclick="() => ViewDetail(activity.Id)">
+                            <div class="card-image">
+                                @if (!string.IsNullOrEmpty(activity.ImageUrl))
+                                {
+                                    <img src="@activity.ImageUrl" alt="@activity.Name" loading="lazy"
+                                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                    <div class="image-placeholder" style="display:none;">
+                                        <span>@GetFirstTagIcon(activity.Category)</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="image-placeholder">
+                                        <span>@GetFirstTagIcon(activity.Category)</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(activity.Category))
+                                {
+                                    <span class="card-category-badge">@GetFirstTag(activity.Category)</span>
+                                }
+                            </div>
+                            <div class="card-body">
+                                <h3 class="card-title">@activity.Name</h3>
+                                <div class="card-rating">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        var starIndex = i;
+                                        <span class="star @(starIndex <= activity.Rating ? "filled" : "")">&#9733;</span>
+                                    }
+                                    <span class="rating-text">@activity.Rating.ToString("0.0")</span>
+                                </div>
+                                <div class="card-details">
+                                    <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                    <span class="card-distance">@GetDistance(activity) mi</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     <!-- Tag Cards Section -->
     <div class="home-section">
         <h2 class="home-section-title">What are you looking for?</h2>
@@ -150,8 +212,8 @@
         </div>
     </div>
 
-    <!-- Filtered Results Section -->
-    @if (selectedTag != null)
+    <!-- Filtered Results Section (hidden during search) -->
+    @if (selectedTag != null && string.IsNullOrWhiteSpace(searchText))
     {
         <div class="home-section" id="filtered-results">
             <div class="filtered-header">
@@ -243,6 +305,8 @@
         new("Education", "\ud83c\udf93"),
     ];
     private string searchText = "";
+    private List<Activity>? allActivities;
+    private List<ScoredActivity>? searchResults;
     private const int HomeDiscoverRadiusMiles = 10;
     private const double MetersPerMile = 1609.34;
 
@@ -336,6 +400,8 @@
             }
 
             await LoadRecentlyViewed();
+            try { allActivities = await ActivityService.ListActivitiesAsync(); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
             ResetTagCache("startup");
             startupComplete = true;
             Logger.LogInformation("Home startup complete: cachedTags={CachedCount}, hasLocation={HasLocation}, hasActiveLocation={HasActive}, recentlyViewedCount={RecentCount}",
@@ -374,6 +440,8 @@
         await InvokeAsync(async () =>
         {
             await LoadRecentlyViewed();
+            try { allActivities = await ActivityService.ListActivitiesAsync(); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Failed to refresh all activities for search"); }
 
             // Check if any cached tags returned empty results. This happens on MAUI after
             // a location change: DiscoverActivitiesAsync returns empty from stale local cache,
@@ -447,16 +515,49 @@
         }
     }
 
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            // Clear any selected category card so results aren't constrained
+            selectedTag = null;
+            filteredActivities = null;
+
+            // Run fuzzy search across all available activities
+            if (allActivities != null && allActivities.Count > 0)
+            {
+                searchResults = FuzzySearchService.Search(allActivities, searchText);
+            }
+            else
+            {
+                searchResults = [];
+            }
+        }
+        else
+        {
+            searchResults = null;
+        }
+
+        StateHasChanged();
+    }
+
     private IEnumerable<Activity> GetFilteredRecent()
     {
         if (recentActivities == null) return [];
         if (string.IsNullOrWhiteSpace(searchText)) return recentActivities;
-        var term = searchText.Trim();
-        return recentActivities.Where(a =>
-            (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        // Use fuzzy search for recently viewed too
+        var scored = FuzzySearchService.Search(recentActivities, searchText);
+        return scored.Select(s => s.Activity);
+    }
+
+    private static string GetFirstTag(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return "";
+        var idx = category.IndexOf(',');
+        return idx >= 0 ? category[..idx].Trim() : category.Trim();
     }
 
     private async Task OnTagSelected(string tagName)

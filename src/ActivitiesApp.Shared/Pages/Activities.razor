@@ -10,9 +10,19 @@
 
 <div class="activities-page">
     <div class="search-row">
-        <div class="search-container">
+        <div class="search-container search-container-with-toggle">
             <input type="text" class="search-input" placeholder="Search activities..."
                    @bind="searchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
+            <button class="filter-toggle-btn @(useFilters ? "active" : "")"
+                    @onclick="ToggleUseFilters"
+                    title="@(useFilters ? "Filters active - click to search without filters" : "Filters off - click to apply filters")">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                <span class="filter-toggle-label">@(useFilters ? "Filtered" : "All")</span>
+            </button>
         </div>
         <div class="location-icon-wrapper">
             <button class="location-btn @(LocationService.HasActiveLocation ? "active" : "")"
@@ -263,6 +273,7 @@
     private List<Activity>? filteredActivities;
 
     private string searchText = "";
+    private bool useFilters = true;
     private int selectedRadius = 10;
     private string selectedCost = "";
     private string selectedCategory = "";
@@ -484,6 +495,12 @@
         }
     }
 
+    private void ToggleUseFilters()
+    {
+        useFilters = !useFilters;
+        ApplyFilters();
+    }
+
     private void ApplyFilters()
     {
         if (allActivities == null)
@@ -510,7 +527,7 @@
             searchCount = workingSet.Count();
         }
 
-        if (!string.IsNullOrEmpty(selectedCost))
+        if (useFilters && !string.IsNullOrEmpty(selectedCost))
         {
             workingSet = selectedCost switch
             {
@@ -523,19 +540,19 @@
             costCount = workingSet.Count();
         }
 
-        if (!string.IsNullOrEmpty(selectedCategory))
+        if (useFilters && !string.IsNullOrEmpty(selectedCategory))
         {
             workingSet = workingSet.Where(a => HasTag(a.Category, selectedCategory));
             categoryCount = workingSet.Count();
         }
 
-        if (LocationService.HasActiveLocation)
+        if (useFilters && LocationService.HasActiveLocation)
         {
             workingSet = workingSet.Where(a => GetDistanceValue(a) <= selectedRadius);
             distanceCount = workingSet.Count();
         }
 
-        if (!string.IsNullOrEmpty(selectedAgeRange))
+        if (useFilters && !string.IsNullOrEmpty(selectedAgeRange))
         {
             var parts = selectedAgeRange.Split('-');
             if (parts.Length == 2 && int.TryParse(parts[0], out var minAge) && int.TryParse(parts[1], out var maxAge))
