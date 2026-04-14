@@ -13,6 +13,7 @@ public static class FuzzySearchService
     // Weights for each field when scoring matches
     private const double NameWeight = 3.0;
     private const double CategoryWeight = 2.5;
+    private const double KeywordWeight = 1.8;
     private const double SynonymWeight = 2.0;
     private const double CityWeight = 1.5;
     private const double DescriptionWeight = 1.0;
@@ -122,6 +123,88 @@ public static class FuzzySearchService
     };
 
     /// <summary>
+    /// Implied keywords per category. These act as a virtual description for activities
+    /// whose Description field is empty. When a query token matches a keyword, the activity
+    /// gets a score boost — lower than a name match but enough to surface relevant results.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> CategoryKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Restaurant"] =
+        [
+            "burger", "burgers", "pizza", "sushi", "pasta", "steak", "tacos", "taco",
+            "wings", "sandwich", "sandwiches", "soup", "salad", "brunch", "breakfast",
+            "lunch", "dinner", "coffee", "cafe", "bakery", "dessert", "seafood",
+            "noodles", "ramen", "bbq", "barbecue", "grill", "buffet", "dine",
+            "milkshake", "shake", "fries", "chicken", "fish", "rice", "curry",
+            "mexican", "chinese", "italian", "thai", "japanese", "indian", "korean",
+            "mediterranean", "american", "food", "eat", "dining"
+        ],
+        ["Fast Food"] =
+        [
+            "burger", "burgers", "fries", "chicken", "nuggets", "pizza", "tacos", "taco",
+            "milkshake", "shake", "combo", "drive-thru", "takeout", "takeaway",
+            "sandwich", "wrap", "hot dog", "hotdog", "wings", "breakfast",
+            "value meal", "food", "eat", "quick", "cheap"
+        ],
+        ["Convenience Store"] =
+        [
+            "snacks", "drinks", "grocery", "groceries", "gas", "fuel",
+            "pharmacy", "atm", "cigarettes", "beer", "wine", "soda", "candy",
+            "chips", "ice cream", "frozen", "essentials", "toiletries"
+        ],
+        ["Outdoors"] =
+        [
+            "park", "hike", "hiking", "trail", "trails", "camping", "nature",
+            "lake", "beach", "forest", "woods", "garden", "picnic", "fishing",
+            "kayak", "canoe", "mountain", "river", "swim", "swimming",
+            "walk", "walking", "bike", "biking", "wildlife", "scenic"
+        ],
+        ["Arts & Culture"] =
+        [
+            "museum", "art", "gallery", "theater", "theatre", "movie", "movies",
+            "cinema", "film", "exhibit", "exhibition", "painting", "sculpture",
+            "history", "performance", "concert", "show", "cultural", "heritage"
+        ],
+        ["Nightlife"] =
+        [
+            "bar", "pub", "club", "lounge", "cocktail", "cocktails", "drinks",
+            "beer", "wine", "happy hour", "live music", "dj", "dance", "dancing",
+            "karaoke", "billiards", "pool", "darts", "nightclub"
+        ],
+        ["Fitness & Sports"] =
+        [
+            "gym", "workout", "exercise", "yoga", "crossfit", "running",
+            "swimming", "basketball", "soccer", "tennis", "bowling", "stadium",
+            "weights", "cardio", "spin", "pilates", "martial arts", "boxing",
+            "climbing", "rock climbing", "volleyball", "golf", "sports"
+        ],
+        ["Shopping"] =
+        [
+            "mall", "clothing", "clothes", "shoes", "jewelry", "electronics",
+            "books", "bookstore", "furniture", "gifts", "souvenirs", "toys",
+            "boutique", "thrift", "vintage", "outlet", "retail", "shop"
+        ],
+        ["Wellness & Beauty"] =
+        [
+            "spa", "salon", "massage", "haircut", "nails", "facial", "pedicure",
+            "manicure", "waxing", "skincare", "treatment", "relaxation",
+            "sauna", "steam", "acupuncture", "chiropractic"
+        ],
+        ["Attractions"] =
+        [
+            "theme park", "amusement", "aquarium", "zoo", "roller coaster",
+            "rides", "water park", "arcade", "mini golf", "go kart",
+            "tourist", "sightseeing", "landmark", "monument", "fun"
+        ],
+        ["Education"] =
+        [
+            "school", "library", "university", "college", "class", "classes",
+            "tutoring", "workshop", "seminar", "lecture", "study", "learning",
+            "training", "course", "bookstore"
+        ],
+    };
+
+    /// <summary>
     /// Searches activities with fuzzy matching, synonym awareness, and relevance scoring.
     /// Returns results sorted by descending relevance score.
     /// </summary>
@@ -177,18 +260,36 @@ public static class FuzzySearchService
             totalScore += descScore * DescriptionWeight;
         }
 
-        // Synonym bonus: if the query maps to categories that this activity belongs to
-        if (synonymCategories.Count > 0 && !string.IsNullOrWhiteSpace(activity.Category))
+        // Keyword bonus: match query tokens against implied keywords for the activity's categories
+        if (!string.IsNullOrWhiteSpace(activity.Category))
         {
             var activityTags = activity.Category
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            foreach (var tag in activityTags)
+            foreach (var qt in queryTokens)
             {
-                if (synonymCategories.Contains(tag))
+                double bestKeywordScore = 0;
+                foreach (var tag in activityTags)
                 {
-                    totalScore += SynonymWeight;
-                    break; // One bonus per activity, not per matching tag
+                    if (CategoryKeywords.TryGetValue(tag, out var keywords))
+                    {
+                        var kwScore = BestTokenScore(qt, keywords);
+                        if (kwScore > bestKeywordScore) bestKeywordScore = kwScore;
+                    }
+                }
+                totalScore += bestKeywordScore * KeywordWeight;
+            }
+
+            // Synonym bonus: if the query maps to categories that this activity belongs to
+            if (synonymCategories.Count > 0)
+            {
+                foreach (var tag in activityTags)
+                {
+                    if (synonymCategories.Contains(tag))
+                    {
+                        totalScore += SynonymWeight;
+                        break;
+                    }
                 }
             }
         }
