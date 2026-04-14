@@ -208,6 +208,7 @@ jobs:
         run: |
           kubectl get secret wildcard-activor-tls --namespace=activitiesapp -o yaml \
             | sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/' \
+            | grep -v '^\s*\(resourceVersion\|uid\|creationTimestamp\|selfLink\):' \
             | kubectl apply -f -
 
       - name: Create secrets
