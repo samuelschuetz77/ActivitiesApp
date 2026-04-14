@@ -165,27 +165,44 @@ jobs:
 
       - name: Register redirect URI with Azure AD
         run: |
+          set -euo pipefail
+
           NEW_URI="http://${{ env.PR_HOST }}/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
           export NEW_URI
 
-          TOKEN_RESPONSE=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sS -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
           )
           TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; print(json.load(sys.stdin)['access_token'])")
 
-          APP=$(curl -sf \
-            "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
+          APP_RESPONSE_FILE=$(mktemp)
+          APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
+            "https://graph.microsoft.com/v1.0/applications?\$filter=appId%20eq%20'$APP_ID'&\$select=id,web" \
             -H "Authorization: Bearer $TOKEN")
+          if [ "$APP_STATUS" -lt 200 ] || [ "$APP_STATUS" -ge 300 ]; then
+            echo "Graph application lookup failed with HTTP $APP_STATUS"
+            cat "$APP_RESPONSE_FILE"
+            exit 1
+          fi
+
+          APP=$(cat "$APP_RESPONSE_FILE")
           OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
           UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=sorted(set(uris + [os.environ['NEW_URI']])); print(json.dumps(uris))")
 
-          curl -sf -X PATCH \
+          PATCH_RESPONSE_FILE=$(mktemp)
+          PATCH_STATUS=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w "%{http_code}" -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"web\":{\"redirectUris\":$UPDATED}}"
+            -d "{\"web\":{\"redirectUris\":$UPDATED}}")
+          if [ "$PATCH_STATUS" -lt 200 ] || [ "$PATCH_STATUS" -ge 300 ]; then
+            echo "Graph redirect registration failed with HTTP $PATCH_STATUS"
+            cat "$PATCH_RESPONSE_FILE"
+            exit 1
+          fi
+
           echo "Registered: $NEW_URI"
 
       - name: Create secrets
@@ -301,27 +318,44 @@ jobs:
 
       - name: Remove redirect URI from Azure AD
         run: |
+          set -euo pipefail
+
           REMOVE_URI="http://pr-${{ env.PR_NUMBER }}.activor.duckdns.org/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
           export REMOVE_URI
 
-          TOKEN_RESPONSE=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sS -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
           )
           TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; print(json.load(sys.stdin)['access_token'])")
 
-          APP=$(curl -sf \
-            "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
+          APP_RESPONSE_FILE=$(mktemp)
+          APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
+            "https://graph.microsoft.com/v1.0/applications?\$filter=appId%20eq%20'$APP_ID'&\$select=id,web" \
             -H "Authorization: Bearer $TOKEN")
+          if [ "$APP_STATUS" -lt 200 ] || [ "$APP_STATUS" -ge 300 ]; then
+            echo "Graph application lookup failed with HTTP $APP_STATUS"
+            cat "$APP_RESPONSE_FILE"
+            exit 1
+          fi
+
+          APP=$(cat "$APP_RESPONSE_FILE")
           OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
           UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=[uri for uri in uris if uri != os.environ['REMOVE_URI']]; print(json.dumps(uris))")
 
-          curl -sf -X PATCH \
+          PATCH_RESPONSE_FILE=$(mktemp)
+          PATCH_STATUS=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w "%{http_code}" -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"web\":{\"redirectUris\":$UPDATED}}"
+            -d "{\"web\":{\"redirectUris\":$UPDATED}}")
+          if [ "$PATCH_STATUS" -lt 200 ] || [ "$PATCH_STATUS" -ge 300 ]; then
+            echo "Graph redirect removal failed with HTTP $PATCH_STATUS"
+            cat "$PATCH_RESPONSE_FILE"
+            exit 1
+          fi
+
           echo "Removed: $REMOVE_URI"
 
       - name: Delete PR namespace
