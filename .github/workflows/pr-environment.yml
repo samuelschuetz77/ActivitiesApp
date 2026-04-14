@@ -167,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          NEW_URI="http://${{ env.PR_HOST }}/signin-oidc"
+          NEW_URI="https://${{ env.PR_HOST }}/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
           export NEW_URI
 
@@ -203,6 +203,12 @@ jobs:
           fi
 
           echo "Registered: $NEW_URI"
+
+      - name: Copy TLS secret
+        run: |
+          kubectl get secret wildcard-activor-tls --namespace=activitiesapp -o yaml \
+            | sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/' \
+            | kubectl apply -f -
 
       - name: Create secrets
         run: |
@@ -242,11 +248,13 @@ jobs:
             annotations:
               nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
               nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-              +
-              
-              nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
           spec:
             ingressClassName: nginx
+            tls:
+              - hosts:
+                  - ${{ env.PR_HOST }}
+                secretName: wildcard-activor-tls
             rules:
               - host: ${{ env.PR_HOST }}
                 http:
@@ -319,7 +327,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          REMOVE_URI="http://pr-${{ env.PR_NUMBER }}.activor.duckdns.org/signin-oidc"
+          REMOVE_URI="https://pr-${{ env.PR_NUMBER }}.activor.duckdns.org/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
           export REMOVE_URI
 
