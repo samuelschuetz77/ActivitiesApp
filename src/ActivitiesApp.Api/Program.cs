@@ -25,8 +25,6 @@ builder.Services.AddGrpc();
 // Determine database provider from environment
 var dbProvider = builder.Configuration["DATABASE_PROVIDER"] ?? "Cosmos";
 var defaultPostgresHost = builder.Environment.IsDevelopment() ? "localhost" : "postgres";
-var runMigrationsOnStartup =
-    string.Equals(builder.Configuration["RUN_DB_MIGRATIONS_ON_STARTUP"], "true", StringComparison.OrdinalIgnoreCase);
 
 if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
 {
@@ -84,7 +82,7 @@ var app = builder.Build();
 
 var startupLog = app.Services.GetRequiredService<ILogger<Program>>();
 var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
-startupLog.LogInformation("Automatic DB migrations on startup: {Enabled}", runMigrationsOnStartup);
+startupLog.LogInformation("Automatic DB migrations enabled on startup");
 startupLog.LogInformation("API starting — DbProvider={DbProvider}, Version={Version}, Env={Env}",
     dbProvider, appVersion, app.Environment.EnvironmentName);
 
@@ -94,27 +92,19 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
-        if (runMigrationsOnStartup)
-        {
-            await pgContext.Database.MigrateAsync();
-            startupLog.LogInformation("Postgres migrations applied");
+        await pgContext.Database.MigrateAsync();
+        startupLog.LogInformation("Postgres migrations applied");
 
-            // Seed from Cosmos -> Postgres only if Postgres is empty
-            var hasData = await pgContext.Activities.AnyAsync();
-            if (!hasData)
-            {
-                var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
-                await seedService.SeedAsync();
-            }
-            else
-            {
-                startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
-            }
+        // Seed from Cosmos -> Postgres only if Postgres is empty
+        var hasData = await pgContext.Activities.AnyAsync();
+        if (!hasData)
+        {
+            var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
+            await seedService.SeedAsync();
         }
         else
         {
-            startupLog.LogInformation(
-                "Skipping Postgres migrations and seed on startup. Set RUN_DB_MIGRATIONS_ON_STARTUP=true to enable them.");
+            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
         }
     }
     else

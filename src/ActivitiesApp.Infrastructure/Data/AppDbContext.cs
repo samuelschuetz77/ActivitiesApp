@@ -83,6 +83,10 @@ namespace ActivitiesApp.Infrastructure.Data
                 .Property(a => a.IsDeleted)
                 .ToJsonProperty("isDeleted");
 
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.CreatedByUserId)
+                .ToJsonProperty("createdByUserId");
+
             modelBuilder.Entity<GoogleApiDailyUsage>()
                 .ToContainer("GoogleApiDailyUsage")
                 .HasPartitionKey(u => u.ApiType)
