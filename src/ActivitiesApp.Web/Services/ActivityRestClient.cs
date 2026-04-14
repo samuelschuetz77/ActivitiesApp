@@ -41,35 +41,130 @@ public class ActivityRestClient : IActivityService
         }
         catch (MicrosoftIdentityWebChallengeUserException ex)
         {
-            var msg = $"Token acquisition failed — re-authentication required. MSAL error: {ex.MsalUiRequiredException?.ErrorCode} — {ex.Message}. Try signing out and back in.";
-            _logger.LogError(ex, "REST CreateActivity token acquisition challenge for Name={Name}", activity.Name ?? "");
-            throw new InvalidOperationException(msg, ex);
+            _logger.LogError(ex, "REST CreateActivity token acquisition failed — user needs to re-authenticate. MSAL error: {ErrorCode}", ex.MsalUiRequiredException?.ErrorCode);
+            throw new CreateActivityException($"Your login session has expired (MSAL: {ex.MsalUiRequiredException?.ErrorCode} — {ex.MsalUiRequiredException?.Message}). Please sign out and sign back in.", ex);
         }
-        catch (Exception ex) when (ex.GetType().Name.Contains("MsalUiRequired") || ex.GetType().Name.Contains("MsalService"))
+        catch (Exception ex)
         {
-            var msg = $"Token acquisition failed — {ex.GetType().Name}: {ex.Message}. Try signing out and back in.";
-            _logger.LogError(ex, "REST CreateActivity token acquisition failed for Name={Name}", activity.Name ?? "");
-            throw new InvalidOperationException(msg, ex);
+            _logger.LogError(ex, "REST CreateActivity token acquisition failed unexpectedly");
+            throw new CreateActivityException($"Authentication error: unable to acquire access token. ({ex.GetType().Name}: {ex.Message})", ex);
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/activities");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = JsonContent.Create(activity);
-        var response = await _http.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
+
+        HttpResponseMessage response;
+        try
         {
-            var responseBody = await response.Content.ReadAsStringAsync();
-            var errorMessage = BuildErrorMessage(response, responseBody);
-            _logger.LogError(
-                "REST CreateActivity failed with StatusCode={StatusCode} for Name={Name}, City={City}. Diagnosis={Diagnosis}. Response={ResponseBody}",
-                (int)response.StatusCode, activity.Name ?? "", activity.City ?? "", errorMessage, responseBody);
-            throw new InvalidOperationException(errorMessage);
+            response = await _http.SendAsync(request);
         }
-        _logger.LogInformation(
-            "REST CreateActivity completed for Name={Name}, City={City}",
-            activity.Name ?? "", activity.City ?? "");
-        return (await response.Content.ReadFromJsonAsync<Activity>())!;
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity timed out for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            throw new CreateActivityException("Request timed out — the API server took too long to respond. Try again in a moment.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "REST CreateActivity network error for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            throw new CreateActivityException($"Network error — could not reach the API server. ({ex.Message})", ex);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _logger.LogInformation("REST CreateActivity completed for Name={Name}, City={City}", activity.Name ?? "", activity.City ?? "");
+            return (await response.Content.ReadFromJsonAsync<Activity>())!;
+        }
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        var statusCode = (int)response.StatusCode;
+        _logger.LogError(
+            "REST CreateActivity failed with StatusCode={StatusCode} for Name={Name}, City={City}. Response={ResponseBody}",
+            statusCode, activity.Name ?? "", activity.City ?? "", responseBody);
+
+        var message = statusCode switch
+        {
+            400 => $"Validation error (400): The server rejected the activity data. Response: {Truncate(responseBody, 200)}",
+            401 => Diagnose401(response, responseBody),
+            403 => "Access denied (403): Your account does not have permission to create activities.",
+            404 => "API endpoint not found (404): The create activity endpoint does not exist on the server. Check API deployment.",
+            409 => $"Conflict (409): A duplicate activity may already exist. Response: {Truncate(responseBody, 200)}",
+            413 => "Payload too large (413): The activity data (possibly images) exceeded the server's size limit.",
+            500 => $"Server error (500): The API crashed while saving. Response: {Truncate(responseBody, 200)}",
+            502 => "Bad gateway (502): The API server is unreachable or restarting. Try again in a minute.",
+            503 => "Service unavailable (503): The API is temporarily down (possibly redeploying). Try again shortly.",
+            _ => $"Unexpected error (HTTP {statusCode}): {Truncate(responseBody, 300)}"
+        };
+
+        throw new CreateActivityException(message);
     }
+
+    // Parses the WWW-Authenticate header and response body to give a specific 401 diagnosis.
+    // Raw WWW-Authenticate is always appended so the full error is visible for debugging.
+    private static string Diagnose401(HttpResponseMessage response, string responseBody)
+    {
+        var wwwAuth = response.Headers.WwwAuthenticate.ToString();
+        var desc = ExtractWwwAuthParam(wwwAuth, "error_description");
+        var error = ExtractWwwAuthParam(wwwAuth, "error");
+        var body = Truncate(responseBody.Trim(), 300);
+        var raw = $" | RAW WWW-Authenticate: [{wwwAuth}] | Body: [{body}]";
+
+        // 1. Token completely absent — no Authorization header reached the API
+        if (string.IsNullOrEmpty(wwwAuth) && string.IsNullOrEmpty(responseBody))
+            return $"401 — No token reached the API. The Bearer token may have been stripped by a reverse proxy or the MSAL silent-refresh returned null. Check ActivityRestClient logs for 'token acquisition'.{raw}";
+
+        // 2. Token expired (most common in long Blazor sessions)
+        if (desc.Contains("lifetime", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("expired", StringComparison.OrdinalIgnoreCase) ||
+            (error == "invalid_token" && !desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) && desc.Contains("expir", StringComparison.OrdinalIgnoreCase)))
+            return $"401 — Token expired. MSAL should auto-refresh; if this persists the token cache may be corrupted — sign out and back in. API said: {desc}{raw}";
+
+        // 3. Wrong audience — aud claim mismatch or App ID URI not configured in Azure
+        if (desc.Contains("audience", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("aud", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Wrong audience. Token 'aud' claim doesn't match expected audience (api://6d3dc4ee-33ce-4656-95c8-702a38464687). Fix: In Azure portal → App Registration → 'Expose an API' → verify Application ID URI = api://6d3dc4ee-33ce-4656-95c8-702a38464687 and scope 'access_as_user' exists and is enabled. API said: {desc}{raw}";
+
+        // 4. Issuer/tenant mismatch
+        if (desc.Contains("issuer", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("iss", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("tenant", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Issuer/tenant mismatch. Token was issued by a tenant the API does not accept. API said: {desc}{raw}";
+
+        // 5. Signature validation failed — key rotation or tampered token
+        if (desc.Contains("signature", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10503", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10511", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Token signature invalid. Signing keys may have just rotated (auto-heals in minutes) or the token was tampered. API said: {desc}{raw}";
+
+        // 6. Token not yet valid — server clock skew (nbf claim)
+        if (desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("not before", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("IDX10501", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Token 'not before' (nbf) is in the future. Clock skew between Entra ID issuer and API host. API said: {desc}{raw}";
+
+        // 7. Malformed Authorization header or wrong Bearer format
+        if (error == "invalid_request" ||
+            desc.Contains("malformed", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("invalid header", StringComparison.OrdinalIgnoreCase))
+            return $"401 — Malformed Authorization header. Bearer scheme or token format rejected by API. API said: {desc}{raw}";
+
+        // 8. Catch-all — full raw details for debugging
+        return $"401 — Token rejected (unrecognized reason). API said: {desc}{raw}";
+    }
+
+    private static string ExtractWwwAuthParam(string header, string param)
+    {
+        // Parses: Bearer error="...", error_description="..."
+        var key = param + "=\"";
+        var start = header.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return string.Empty;
+        start += key.Length;
+        var end = header.IndexOf('"', start);
+        return end < 0 ? string.Empty : header[start..end];
+    }
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength] + "...";
 
     public async Task<Activity?> GetActivityAsync(Guid id)
     {
@@ -234,88 +329,6 @@ public class ActivityRestClient : IActivityService
             return null;
         }
     }
-
-    private static string BuildErrorMessage(HttpResponseMessage response, string responseBody)
-    {
-        var statusCode = (int)response.StatusCode;
-        var body = Truncate(responseBody.Trim(), 300);
-        return statusCode switch
-        {
-            400 => $"Validation error (400): The server rejected the activity data. Response: {body}",
-            401 => Diagnose401(response, responseBody),
-            403 => "Access denied (403): Your account does not have permission to create activities.",
-            404 => "API endpoint not found (404): The create-activity endpoint does not exist on the server. Check API deployment.",
-            409 => $"Conflict (409): A duplicate activity may already exist. Response: {body}",
-            _ => $"HTTP {statusCode}: Unexpected error from API. Response: {body}"
-        };
-    }
-
-    // Parses the WWW-Authenticate header and response body to give a specific 401 diagnosis.
-    // Raw WWW-Authenticate is always appended so the full error is visible for debugging.
-    private static string Diagnose401(HttpResponseMessage response, string responseBody)
-    {
-        var wwwAuth = response.Headers.WwwAuthenticate.ToString();
-        var desc = ExtractWwwAuthParam(wwwAuth, "error_description");
-        var error = ExtractWwwAuthParam(wwwAuth, "error");
-        var body = Truncate(responseBody.Trim(), 300);
-        var raw = $" | RAW WWW-Authenticate: [{wwwAuth}] | Body: [{body}]";
-
-        // 1. Token completely absent — Authorization header never reached the API
-        if (string.IsNullOrEmpty(wwwAuth) && string.IsNullOrEmpty(responseBody))
-            return $"401 — No token reached the API. The Bearer token may have been stripped by a reverse proxy or MSAL silent-refresh returned null. Check ActivityRestClient logs for 'token acquisition'.{raw}";
-
-        // 2. Token expired (long Blazor sessions, stale cache)
-        if (desc.Contains("lifetime", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("expired", StringComparison.OrdinalIgnoreCase) ||
-            (error == "invalid_token" && !desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) && desc.Contains("expir", StringComparison.OrdinalIgnoreCase)))
-            return $"401 — Token expired. MSAL should auto-refresh; if this persists the token cache may be corrupted — sign out and back in. API said: {desc}{raw}";
-
-        // 3. Wrong audience — aud claim mismatch or App ID URI not configured in Azure
-        if (desc.Contains("audience", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("aud", StringComparison.OrdinalIgnoreCase))
-            return $"401 — Wrong audience. Token 'aud' claim doesn't match expected audience (api://6d3dc4ee-33ce-4656-95c8-702a38464687). Fix: In Azure portal → App Registration → 'Expose an API' → verify Application ID URI = api://6d3dc4ee-33ce-4656-95c8-702a38464687 and scope 'access_as_user' exists and is enabled. API said: {desc}{raw}";
-
-        // 4. Issuer/tenant mismatch
-        if (desc.Contains("issuer", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("iss", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("tenant", StringComparison.OrdinalIgnoreCase))
-            return $"401 — Issuer/tenant mismatch. Token was issued by a tenant the API does not accept. API said: {desc}{raw}";
-
-        // 5. Signature validation failed — key rotation or tampered token
-        if (desc.Contains("signature", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("IDX10503", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("IDX10511", StringComparison.OrdinalIgnoreCase))
-            return $"401 — Token signature invalid. Signing keys may have just rotated (auto-heals in minutes) or the token was tampered. API said: {desc}{raw}";
-
-        // 6. Token not yet valid — server clock skew (nbf claim)
-        if (desc.Contains("nbf", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("not before", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("IDX10501", StringComparison.OrdinalIgnoreCase))
-            return $"401 — Token 'not before' (nbf) is in the future. Clock skew between Entra ID issuer and API host. API said: {desc}{raw}";
-
-        // 7. Malformed Authorization header or wrong Bearer format
-        if (error == "invalid_request" ||
-            desc.Contains("malformed", StringComparison.OrdinalIgnoreCase) ||
-            desc.Contains("invalid header", StringComparison.OrdinalIgnoreCase))
-            return $"401 — Malformed Authorization header. Bearer scheme or token format rejected by API. API said: {desc}{raw}";
-
-        // 8. Catch-all — full raw details for debugging
-        return $"401 — Token rejected (unrecognized reason). API said: {desc}{raw}";
-    }
-
-    private static string ExtractWwwAuthParam(string header, string param)
-    {
-        // Parses: Bearer error="...", error_description="..."
-        var key = param + "=\"";
-        var start = header.IndexOf(key, StringComparison.OrdinalIgnoreCase);
-        if (start < 0) return string.Empty;
-        start += key.Length;
-        var end = header.IndexOf('"', start);
-        return end < 0 ? string.Empty : header[start..end];
-    }
-
-    private static string Truncate(string value, int maxLength)
-        => value.Length <= maxLength ? value : value[..maxLength] + "...";
 
     private record ReverseGeocodeResult(string FormattedAddress);
 }

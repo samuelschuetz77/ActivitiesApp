@@ -272,11 +272,11 @@
             zipCode = "";
             imagePreviews.Clear();
         }
-        catch (InvalidOperationException ex)
+        catch (CreateActivityException ex)
         {
             Logger.LogError(ex,
-                "CreateActivity submit failed for Name={Name}, City={City}",
-                newActivity.Name ?? "", newActivity.City ?? "");
+                "CreateActivity failed for Name={Name}, City={City}: {Reason}",
+                newActivity.Name ?? "", newActivity.City ?? "", ex.Message);
             errorMessage = ex.Message;
         }
         catch (HttpRequestException ex)
@@ -284,14 +284,14 @@
             Logger.LogError(ex,
                 "CreateActivity submit failed with HTTP error for Name={Name}, City={City}",
                 newActivity.Name ?? "", newActivity.City ?? "");
-            errorMessage = ex.Message;
+            errorMessage = $"Network/HTTP error: {ex.Message}";
         }
         catch (Exception ex)
         {
             Logger.LogError(ex,
                 "CreateActivity submit failed unexpectedly for Name={Name}, City={City}",
                 newActivity.Name ?? "", newActivity.City ?? "");
-            errorMessage = $"Unexpected error: {ex.GetType().Name} — {ex.Message}";
+            errorMessage = $"Unexpected error ({ex.GetType().Name}): {ex.Message}";
         }
         finally
         {
