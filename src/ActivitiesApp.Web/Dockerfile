@@ -7,6 +7,7 @@ WORKDIR /src
 
 # Copy csproj files and restore
 COPY src/ActivitiesApp.Web/ActivitiesApp.Web.csproj src/ActivitiesApp.Web/
+COPY src/ActivitiesApp.Core/ActivitiesApp.Core.csproj src/ActivitiesApp.Core/
 COPY src/ActivitiesApp.Shared/ActivitiesApp.Shared.csproj src/ActivitiesApp.Shared/
 COPY src/ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj src/ActivitiesApp.ServiceDefaults/
 COPY src/ActivitiesApp.Api/Protos/ src/ActivitiesApp.Api/Protos/
@@ -14,6 +15,7 @@ RUN dotnet restore src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
 
 # Copy everything and build
 COPY src/ActivitiesApp.Web/ src/ActivitiesApp.Web/
+COPY src/ActivitiesApp.Core/ src/ActivitiesApp.Core/
 COPY src/ActivitiesApp.Shared/ src/ActivitiesApp.Shared/
 COPY src/ActivitiesApp.ServiceDefaults/ src/ActivitiesApp.ServiceDefaults/
 COPY src/ActivitiesApp.Api/Protos/ src/ActivitiesApp.Api/Protos/
