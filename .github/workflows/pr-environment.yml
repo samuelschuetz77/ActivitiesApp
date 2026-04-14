@@ -175,11 +175,7 @@ jobs:
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
           )
-          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); token=data.get('access_token'); \
-if not token: \
-    print(json.dumps(data), file=sys.stderr); \
-    raise SystemExit(1); \
-print(token)")
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json,sys; data=json.load(sys.stdin); token=data.get('access_token'); print(token) if token else (print(json.dumps(data), file=sys.stderr), sys.exit(1))")
 
           APP_RESPONSE_FILE=$(mktemp)
           APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
@@ -332,11 +328,7 @@ print(token)")
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
             -d "client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
           )
-          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); token=data.get('access_token'); \
-if not token: \
-    print(json.dumps(data), file=sys.stderr); \
-    raise SystemExit(1); \
-print(token)")
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json,sys; data=json.load(sys.stdin); token=data.get('access_token'); print(token) if token else (print(json.dumps(data), file=sys.stderr), sys.exit(1))")
 
           APP_RESPONSE_FILE=$(mktemp)
           APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
