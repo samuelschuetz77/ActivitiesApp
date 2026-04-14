@@ -9,6 +9,10 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  group: pr-environment-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 env:
   DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
   API_IMAGE: ${{ secrets.DOCKER_USERNAME }}/activitiesapp-api
@@ -16,85 +20,9 @@ env:
   PR_NUMBER: ${{ github.event.pull_request.number }}
 
 jobs:
-  # ── CI: build → lint → test → push (same gates as deploy.yml) ──
-
-  build:
-    name: Build
+  prepare:
+    name: Prepare
     if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-          dotnet-quality: "preview"
-
-      - name: Build API
-        run: dotnet build src/ActivitiesApp.Api/ActivitiesApp.Api.csproj -c Release
-
-      - name: Build Web
-        run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj -c Release
-
-  lint:
-    name: Lint
-    if: github.event.action != 'closed'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Lint API
-        run: |
-          docker run \
-            --rm \
-            -u $(id -u):$(id -g) \
-            -e DOTNET_CLI_HOME=/tmp/dotnet-home \
-            -e HOME=/tmp \
-            -e NUGET_PACKAGES=/tmp/nuget-packages \
-            -v .:/app \
-            -w /app \
-            mcr.microsoft.com/dotnet/sdk:10.0 \
-              dotnet format --verify-no-changes src/ActivitiesApp.Api/ActivitiesApp.Api.csproj
-
-      - name: Lint Web
-        run: |
-          docker run \
-            --rm \
-            -u $(id -u):$(id -g) \
-            -e DOTNET_CLI_HOME=/tmp/dotnet-home \
-            -e HOME=/tmp \
-            -e NUGET_PACKAGES=/tmp/nuget-packages \
-            -v .:/app \
-            -w /app \
-            mcr.microsoft.com/dotnet/sdk:10.0 \
-              dotnet format --verify-no-changes src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
-
-  test:
-    name: Test
-    if: github.event.action != 'closed'
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-          dotnet-quality: "preview"
-
-      - name: Run API unit tests
-        run: dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
-
-      - name: Run Infrastructure unit tests
-        run: dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
-
-  push:
-    name: Push Images
-    if: github.event.action != 'closed'
-    needs: test
     runs-on: ubuntu-latest
     outputs:
       sha_tag: ${{ steps.tag.outputs.sha }}
@@ -105,6 +33,71 @@ jobs:
         id: tag
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+  lint:
+    name: Lint
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'NuGet.Config', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Lint API
+        run: dotnet format --verify-no-changes src/ActivitiesApp.Api/ActivitiesApp.Api.csproj
+
+      - name: Lint Web
+        run: dotnet format --verify-no-changes src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
+
+  test:
+    name: Test
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'NuGet.Config', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Run API unit tests
+        run: dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
+
+      - name: Run Infrastructure unit tests
+        run: dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
+
+  push-api:
+    name: Push API Image
+    if: github.event.action != 'closed'
+    needs: [prepare, lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker login
         uses: docker/login-action@v3
         with:
@@ -112,24 +105,49 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build & push API image
-        run: |
-          docker build -f src/ActivitiesApp.Api/Dockerfile -t ${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ steps.tag.outputs.sha }} .
-          docker push ${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ steps.tag.outputs.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/ActivitiesApp.Api/Dockerfile
+          push: true
+          tags: ${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ needs.prepare.outputs.sha_tag }}
+          cache-from: type=gha,scope=activitiesapp-api
+          cache-to: type=gha,mode=max,scope=activitiesapp-api
+
+  push-web:
+    name: Push Web Image
+    if: github.event.action != 'closed'
+    needs: [prepare, lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build & push Web image
-        run: |
-          docker build -f src/ActivitiesApp.Web/Dockerfile -t ${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ steps.tag.outputs.sha }} .
-          docker push ${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ steps.tag.outputs.sha }}
-
-  # ── Deploy PR environment to Kubernetes ──
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/ActivitiesApp.Web/Dockerfile
+          push: true
+          tags: ${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ needs.prepare.outputs.sha_tag }}
+          cache-from: type=gha,scope=activitiesapp-web
+          cache-to: type=gha,mode=max,scope=activitiesapp-web
 
   deploy:
     name: Deploy PR Environment
     if: github.event.action != 'closed'
-    needs: push
+    needs: [prepare, push-api, push-web]
     runs-on: self-hosted
     env:
-      SHA_TAG: ${{ needs.push.outputs.sha_tag }}
+      SHA_TAG: ${{ needs.prepare.outputs.sha_tag }}
       NAMESPACE: activitiesapp-pr-${{ github.event.pull_request.number }}
       PR_HOST: pr-${{ github.event.pull_request.number }}.activor.duckdns.org
     steps:
@@ -147,26 +165,43 @@ jobs:
 
       - name: Register redirect URI with Azure AD
         run: |
+          set -euo pipefail
+
           NEW_URI="http://${{ env.PR_HOST }}/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
+          export NEW_URI
 
-          TOKEN=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sS -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
-            | jq -r '.access_token')
+            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials")
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json,sys; data=json.load(sys.stdin); token=data.get('access_token'); print(token) if token else (print(json.dumps(data), file=sys.stderr), sys.exit(1))")
 
-          APP=$(curl -sf \
-            "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
+          APP_RESPONSE_FILE=$(mktemp)
+          APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
+            "https://graph.microsoft.com/v1.0/applications?\$filter=appId%20eq%20'$APP_ID'&\$select=id,web" \
             -H "Authorization: Bearer $TOKEN")
-          OBJECT_ID=$(echo "$APP" | jq -r '.value[0].id')
-          CURRENT_URIS=$(echo "$APP" | jq '.value[0].web.redirectUris')
+          if [ "$APP_STATUS" -lt 200 ] || [ "$APP_STATUS" -ge 300 ]; then
+            echo "Graph application lookup failed with HTTP $APP_STATUS"
+            cat "$APP_RESPONSE_FILE"
+            exit 1
+          fi
 
-          UPDATED=$(echo "$CURRENT_URIS" | jq --arg uri "$NEW_URI" '. + [$uri] | unique')
-          curl -sf -X PATCH \
+          APP=$(cat "$APP_RESPONSE_FILE")
+          OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
+          UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=sorted(set(uris + [os.environ['NEW_URI']])); print(json.dumps(uris))")
+
+          PATCH_RESPONSE_FILE=$(mktemp)
+          PATCH_STATUS=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w "%{http_code}" -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"web\":{\"redirectUris\":$UPDATED}}"
+            -d "{\"web\":{\"redirectUris\":$UPDATED}}")
+          if [ "$PATCH_STATUS" -lt 200 ] || [ "$PATCH_STATUS" -ge 300 ]; then
+            echo "Graph redirect registration failed with HTTP $PATCH_STATUS"
+            cat "$PATCH_RESPONSE_FILE"
+            exit 1
+          fi
+
           echo "Registered: $NEW_URI"
 
       - name: Create secrets
@@ -225,7 +260,7 @@ jobs:
                             number: 80
           EOF
 
-      - name: Set deployment images
+      - name: Set deployment images and APP_VERSION
         run: |
           kubectl set image deployment/activitiesapp-api \
             api=${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} \
@@ -233,16 +268,14 @@ jobs:
           kubectl set image deployment/activitiesapp-web \
             web=${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} \
             --namespace=${{ env.NAMESPACE }}
-
-      - name: Set APP_VERSION
-        run: |
           kubectl set env deployment/activitiesapp-api APP_VERSION=pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} --namespace=${{ env.NAMESPACE }}
           kubectl set env deployment/activitiesapp-web APP_VERSION=pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} --namespace=${{ env.NAMESPACE }}
 
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/activitiesapp-api --namespace=${{ env.NAMESPACE }} --timeout=120s
-          kubectl rollout status deployment/activitiesapp-web --namespace=${{ env.NAMESPACE }} --timeout=120s
+          kubectl rollout status deployment/activitiesapp-api --namespace=${{ env.NAMESPACE }} --timeout=120s &
+          kubectl rollout status deployment/activitiesapp-web --namespace=${{ env.NAMESPACE }} --timeout=120s &
+          wait
 
       - name: Post PR comment with URL
         run: |
@@ -270,8 +303,6 @@ jobs:
           echo "=== Ingress ==="
           kubectl get ingress --namespace=${{ env.NAMESPACE }}
 
-  # ── Teardown on PR close ──
-
   teardown:
     name: Teardown PR Environment
     if: github.event.action == 'closed'
@@ -286,25 +317,43 @@ jobs:
 
       - name: Remove redirect URI from Azure AD
         run: |
+          set -euo pipefail
+
           REMOVE_URI="http://pr-${{ env.PR_NUMBER }}.activor.duckdns.org/signin-oidc"
           APP_ID="6d3dc4ee-33ce-4656-95c8-702a38464687"
+          export REMOVE_URI
 
-          TOKEN=$(curl -sf -X POST \
+          TOKEN_RESPONSE=$(curl -sS -X POST \
             "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials" \
-            | jq -r '.access_token')
+            -d "client_id=${{ secrets.AZURE_CI_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET_CI }}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials")
+          TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import json,sys; data=json.load(sys.stdin); token=data.get('access_token'); print(token) if token else (print(json.dumps(data), file=sys.stderr), sys.exit(1))")
 
-          APP=$(curl -sf \
-            "https://graph.microsoft.com/v1.0/applications?\$filter=appId eq '$APP_ID'" \
+          APP_RESPONSE_FILE=$(mktemp)
+          APP_STATUS=$(curl -sS -o "$APP_RESPONSE_FILE" -w "%{http_code}" \
+            "https://graph.microsoft.com/v1.0/applications?\$filter=appId%20eq%20'$APP_ID'&\$select=id,web" \
             -H "Authorization: Bearer $TOKEN")
-          OBJECT_ID=$(echo "$APP" | jq -r '.value[0].id')
-          UPDATED=$(echo "$APP" | jq --arg uri "$REMOVE_URI" '.value[0].web.redirectUris | map(select(. != $uri))')
+          if [ "$APP_STATUS" -lt 200 ] || [ "$APP_STATUS" -ge 300 ]; then
+            echo "Graph application lookup failed with HTTP $APP_STATUS"
+            cat "$APP_RESPONSE_FILE"
+            exit 1
+          fi
 
-          curl -sf -X PATCH \
+          APP=$(cat "$APP_RESPONSE_FILE")
+          OBJECT_ID=$(printf '%s' "$APP" | python3 -c "import json, sys; print(json.load(sys.stdin)['value'][0]['id'])")
+          UPDATED=$(printf '%s' "$APP" | python3 -c "import json, os, sys; app=json.load(sys.stdin)['value'][0]; uris=app.get('web', {}).get('redirectUris', []); uris=[uri for uri in uris if uri != os.environ['REMOVE_URI']]; print(json.dumps(uris))")
+
+          PATCH_RESPONSE_FILE=$(mktemp)
+          PATCH_STATUS=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w "%{http_code}" -X PATCH \
             "https://graph.microsoft.com/v1.0/applications/$OBJECT_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"web\":{\"redirectUris\":$UPDATED}}"
+            -d "{\"web\":{\"redirectUris\":$UPDATED}}")
+          if [ "$PATCH_STATUS" -lt 200 ] || [ "$PATCH_STATUS" -ge 300 ]; then
+            echo "Graph redirect removal failed with HTTP $PATCH_STATUS"
+            cat "$PATCH_RESPONSE_FILE"
+            exit 1
+          fi
+
           echo "Removed: $REMOVE_URI"
 
       - name: Delete PR namespace
@@ -320,12 +369,10 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
             -d '{"body":"**PR Environment torn down.** Namespace `${{ env.NAMESPACE }}` and all resources have been deleted."}'
 
-  # ── Failure notification ──
-
   notify:
     name: Notify on failure
-    needs: [build, lint, test, push, deploy]
-    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    needs: [prepare, lint, test, push-api, push-web, deploy]
+    if: ${{ github.event.action != 'closed' && always() && contains(join(needs.*.result, ','), 'failure') }}
     runs-on: ubuntu-latest
     steps:
       - name: Send ntfy notification
