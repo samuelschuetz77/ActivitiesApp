@@ -12,9 +12,19 @@
 <div class="activities-page">
     <!-- Search + Location Row -->
     <div class="search-row">
-        <div class="search-container">
+        <div class="search-container search-container-with-toggle">
             <input type="text" class="search-input" placeholder="Search activities..."
                    @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
+            <button class="filter-toggle-btn @(useFilters ? "active" : "")"
+                    @onclick="ToggleUseFilters"
+                    title="@(useFilters ? "Filters active — click to search without filters" : "Filters off — click to apply filters")">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                <span class="filter-toggle-label">@(useFilters ? "Filtered" : "All")</span>
+            </button>
         </div>
         <div class="location-icon-wrapper">
             <button class="location-btn @(hasActiveLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
@@ -192,6 +202,7 @@
     private List<Activity>? filteredActivities;
 
     private string searchText = "";
+    private bool useFilters = true;
     private int selectedRadius = 10;
     private string selectedCost = "";
     private string selectedCategory = "";
@@ -312,22 +323,42 @@
         }
     }
 
+    private void ToggleUseFilters()
+    {
+        useFilters = !useFilters;
+        ApplyFilters();
+    }
+
     private void ApplyFilters()
     {
         if (allActivities == null) return;
 
-        var query = allActivities.AsEnumerable();
+        IEnumerable<Activity> query;
 
         if (!string.IsNullOrWhiteSpace(searchText))
         {
-            var term = searchText.Trim();
-            query = query.Where(a =>
-                (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+            // Use fuzzy search as the base
+            var scored = FuzzySearchService.Search(allActivities, searchText.Trim());
+            query = scored.Select(s => s.Activity);
+
+            // Only apply dropdown filters if the toggle is on
+            if (useFilters)
+            {
+                query = ApplyDropdownFilters(query);
+            }
+        }
+        else
+        {
+            // No search text: always apply dropdown filters (existing behavior)
+            query = ApplyDropdownFilters(allActivities);
         }
 
+        filteredActivities = query.ToList();
+        StateHasChanged();
+    }
+
+    private IEnumerable<Activity> ApplyDropdownFilters(IEnumerable<Activity> query)
+    {
         if (!string.IsNullOrEmpty(selectedCost))
         {
             query = selectedCost switch
@@ -359,8 +390,7 @@
             }
         }
 
-        filteredActivities = query.ToList();
-        StateHasChanged();
+        return query;
     }
 
     private void ViewDetail(Guid id)
