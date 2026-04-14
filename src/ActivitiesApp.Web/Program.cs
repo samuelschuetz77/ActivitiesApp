@@ -22,7 +22,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 // Microsoft Entra ID authentication
-builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAd");
+builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"))
+    .EnableTokenAcquisitionToCallDownstreamApi(["api://6d3dc4ee-33ce-4656-95c8-702a38464687/access_as_user"])
+    .AddInMemoryTokenCaches();
 builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, (OpenIdConnectOptions options) =>
 {
     options.Events ??= new OpenIdConnectEvents();

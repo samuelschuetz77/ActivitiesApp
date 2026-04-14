@@ -130,7 +130,7 @@ jobs:
     runs-on: self-hosted
     env:
       SHA_TAG: ${{ needs.push.outputs.sha_tag }}
-      NAMESPACE: pr-${{ github.event.pull_request.number }}
+      NAMESPACE: activitiesapp-pr-${{ github.event.pull_request.number }}
       PR_HOST: pr-${{ github.event.pull_request.number }}.activor.duckdns.org
     steps:
       - uses: actions/checkout@v4
@@ -253,7 +253,7 @@ jobs:
     if: github.event.action == 'closed'
     runs-on: self-hosted
     env:
-      NAMESPACE: pr-${{ github.event.pull_request.number }}
+      NAMESPACE: activitiesapp-pr-${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
 

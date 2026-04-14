@@ -1,13 +1,18 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ActivitiesApp.Shared.Models;
 using ActivitiesApp.Shared.Services;
+using Microsoft.Identity.Web;
 
 namespace ActivitiesApp.Web.Services;
 
 public class ActivityRestClient : IActivityService
 {
+    private const string ApiScope = "api://6d3dc4ee-33ce-4656-95c8-702a38464687/access_as_user";
+
     private readonly HttpClient _http;
     private readonly ILogger<ActivityRestClient> _logger;
+    private readonly ITokenAcquisition _tokenAcquisition;
     private readonly string? _apiBaseAddress;
 
     // In-memory discover cache — survives component navigation (this service is scoped per-circuit)
@@ -15,10 +20,11 @@ public class ActivityRestClient : IActivityService
     private double _cachedLat;
     private double _cachedLng;
 
-    public ActivityRestClient(HttpClient http, ILogger<ActivityRestClient> logger)
+    public ActivityRestClient(HttpClient http, ILogger<ActivityRestClient> logger, ITokenAcquisition tokenAcquisition)
     {
         _http = http;
         _logger = logger;
+        _tokenAcquisition = tokenAcquisition;
         _apiBaseAddress = _http.BaseAddress?.ToString().TrimEnd('/');
     }
 
@@ -27,7 +33,12 @@ public class ActivityRestClient : IActivityService
         _logger.LogInformation(
             "REST CreateActivity starting for Name={Name}, City={City}, Category={Category}",
             activity.Name ?? "", activity.City ?? "", activity.Category ?? "");
-        var response = await _http.PostAsJsonAsync("/api/activities", activity);
+
+        var token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope]);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/activities");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(activity);
+        var response = await _http.SendAsync(request);
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync();
