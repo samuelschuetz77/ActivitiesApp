@@ -14,7 +14,7 @@
     <div class="search-row">
         <div class="search-container search-container-with-toggle">
             <input type="text" class="search-input" placeholder="Search activities..."
-                   @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
+                   value="@searchText" @oninput="OnSearchInput" />
             <button class="filter-toggle-btn @(useFilters ? "active" : "")"
                     @onclick="ToggleUseFilters"
                     title="@(useFilters ? "Filters active — click to search without filters" : "Filters off — click to apply filters")">
@@ -321,6 +321,21 @@
         {
             ApplyFilters();
         }
+    }
+
+    private CancellationTokenSource? _searchCts;
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+        _ = Task.Delay(200, token).ContinueWith(_ =>
+        {
+            if (!token.IsCancellationRequested)
+                InvokeAsync(() => { ApplyFilters(); StateHasChanged(); });
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
     }
 
     private void ToggleUseFilters()

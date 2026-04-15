@@ -1,0 +1,22 @@
+{
+  "name": "playwright-tests",
+  "version": "1.0.0",
+  "description": "UI diagnostic tests for ActivitiesApp (not in CI pipeline)",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:azure": "npx playwright test --project=azure",
+    "test:duckdns": "npx playwright test --project=duckdns",
+    "test:search": "npx playwright test tests/search-bar.spec.ts",
+    "test:perf": "npx playwright test tests/page-performance.spec.ts",
+    "test:headed": "npx playwright test --headed",
+    "report": "npx playwright show-report ../playwright-logs/html-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

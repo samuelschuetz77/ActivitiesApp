@@ -479,13 +479,40 @@
         }
     }
 
+    private CancellationTokenSource? _searchCts;
+
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchText = e.Value?.ToString() ?? "";
-        selectedTag = string.IsNullOrWhiteSpace(searchText) ? selectedTag : null;
-        filteredActivities = string.IsNullOrWhiteSpace(searchText) ? filteredActivities : null;
-        searchResults = string.IsNullOrWhiteSpace(searchText) ? null : FuzzySearchService.Search(allActivities ?? [], searchText);
-        StateHasChanged();
+
+        // Clear search results immediately when input emptied (no delay needed)
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            searchResults = null;
+            StateHasChanged();
+            return;
+        }
+
+        // Clear tag selection immediately so UI responds
+        selectedTag = null;
+        filteredActivities = null;
+
+        // Debounce fuzzy search — 200ms after last keystroke
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+        var capturedText = searchText;
+        _ = Task.Delay(200, token).ContinueWith(_ =>
+        {
+            if (!token.IsCancellationRequested)
+            {
+                InvokeAsync(() =>
+                {
+                    searchResults = FuzzySearchService.Search(allActivities ?? [], capturedText);
+                    StateHasChanged();
+                });
+            }
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
     }
 
     private IEnumerable<Activity> GetFilteredRecent() =>
