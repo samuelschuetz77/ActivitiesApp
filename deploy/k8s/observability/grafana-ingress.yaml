@@ -3,8 +3,15 @@ kind: Ingress
 metadata:
   name: grafana
   namespace: activitiesapp
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - grafana.activor.duckdns.org
+      secretName: wildcard-activor-tls
   rules:
     - host: grafana.activor.duckdns.org
       http:
