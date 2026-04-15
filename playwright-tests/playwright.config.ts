@@ -36,5 +36,11 @@ export default defineConfig({
         baseURL: 'https://activor.duckdns.org',
       },
     },
+    {
+      name: 'pr',
+      use: {
+        baseURL: 'http://pr-23.activor.duckdns.org',
+      },
+    },
   ],
 });
