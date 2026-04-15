@@ -7,10 +7,12 @@
              x:DataType="vm:HomeViewModel"
              Title="{Binding Title}">
 
-    <BlazorWebView HostPage="wwwroot/index.html" StartPath="/">
-        <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
-        </BlazorWebView.RootComponents>
-    </BlazorWebView>
+    <Grid x:Name="BlazorHost">
+        <BlazorWebView x:Name="HomeBlazorWebView" HostPage="wwwroot/index.html" StartPath="/">
+            <BlazorWebView.RootComponents>
+                <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
+            </BlazorWebView.RootComponents>
+        </BlazorWebView>
+    </Grid>
 
 </ContentPage>
