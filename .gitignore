@@ -372,3 +372,13 @@ Kubernetes-reference-folder-seperate-project-dont-mix/
 # Build logs
 api_build.log
 k8s-backup/
+
+# Playwright test artifacts (screenshots, videos, traces, reports)
+playwright-logs/*
+!playwright-logs/.gitkeep
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Windows junk
+nul
