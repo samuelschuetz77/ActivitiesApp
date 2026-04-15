@@ -96,13 +96,13 @@
                                 <img src="@activity.ImageUrl" alt="@activity.Name"
                                      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                 <div class="image-placeholder" style="display:none;">
-                                    <span>@GetFirstTagIcon(activity.Category)</span>
+                                    <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                                 </div>
                             }
                             else
                             {
                                 <div class="image-placeholder">
-                                    <span>@GetFirstTagIcon(activity.Category)</span>
+                                    <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                                 </div>
                             }
                         </div>
@@ -117,7 +117,7 @@
                                 <span class="rating-text">@activity.Rating.ToString("0.0")</span>
                             </div>
                             <div class="card-details">
-                                <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                <span class="card-cost">@ActivityFormatter.FormatCost(activity.Cost)</span>
                                 <span class="card-distance">@GetDistance(activity) mi</span>
                             </div>
                         </div>
@@ -153,18 +153,18 @@
                                     <img src="@activity.ImageUrl" alt="@activity.Name" loading="lazy"
                                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                     <div class="image-placeholder" style="display:none;">
-                                        <span>@GetFirstTagIcon(activity.Category)</span>
+                                        <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                                     </div>
                                 }
                                 else
                                 {
                                     <div class="image-placeholder">
-                                        <span>@GetFirstTagIcon(activity.Category)</span>
+                                        <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                                     </div>
                                 }
                                 @if (!string.IsNullOrEmpty(activity.Category))
                                 {
-                                    <span class="card-category-badge">@GetFirstTag(activity.Category)</span>
+                                    <span class="card-category-badge">@CategoryHelper.GetFirstTag(activity.Category)</span>
                                 }
                             </div>
                             <div class="card-body">
@@ -178,7 +178,7 @@
                                     <span class="rating-text">@activity.Rating.ToString("0.0")</span>
                                 </div>
                                 <div class="card-details">
-                                    <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                    <span class="card-cost">@ActivityFormatter.FormatCost(activity.Cost)</span>
                                     <span class="card-distance">@GetDistance(activity) mi</span>
                                 </div>
                             </div>
@@ -194,7 +194,7 @@
         <h2 class="home-section-title">What are you looking for?</h2>
         <p class="home-section-subtitle">Tap a tag to load places near your current or selected location.</p>
         <div class="tag-cards-grid">
-            @foreach (var tag in tagCards)
+            @foreach (var tag in CategoryHelper.TagCards)
             {
                 <div class="tag-card @(selectedTag == tag.Name ? "selected" : "")"
                      @onclick="() => OnTagSelected(tag.Name)">
@@ -234,13 +234,13 @@
                                     <img src="@activity.ImageUrl" alt="@activity.Name" loading="lazy"
                                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                     <div class="image-placeholder" style="display:none;">
-                                        <span>@GetTagIcon(selectedTag)</span>
+                                        <span>@CategoryHelper.GetTagIcon(selectedTag)</span>
                                     </div>
                                 }
                                 else
                                 {
                                     <div class="image-placeholder">
-                                        <span>@GetTagIcon(selectedTag)</span>
+                                        <span>@CategoryHelper.GetTagIcon(selectedTag)</span>
                                     </div>
                                 }
                                 @if (!string.IsNullOrEmpty(selectedTag))
@@ -259,7 +259,7 @@
                                     <span class="rating-text">@activity.Rating.ToString("0.0")</span>
                                 </div>
                                 <div class="card-details">
-                                    <span class="card-cost">@FormatCost(activity.Cost)</span>
+                                    <span class="card-cost">@ActivityFormatter.FormatCost(activity.Cost)</span>
                                     <span class="card-distance">@GetDistance(activity) mi</span>
                                 </div>
                             </div>
@@ -272,21 +272,7 @@
 </div>
 
 @code {
-    // Tag card definitions matching GooglePlaceTagMapper on the backend
-    private static readonly List<TagCardInfo> tagCards =
-    [
-        new("Restaurant", "\ud83c\udf7d\ufe0f"),
-        new("Fast Food", "\ud83c\udf54"),
-        new("Convenience Store", "\ud83c\udfe0"),
-        new("Attractions", "\u2b50"),
-        new("Outdoors", "\ud83c\udf32"),
-        new("Arts & Culture", "\ud83c\udfa8"),
-        new("Nightlife", "\ud83c\udf19"),
-        new("Shopping", "\ud83d\udecd\ufe0f"),
-        new("Fitness & Sports", "\ud83c\udfcb\ufe0f"),
-        new("Wellness & Beauty", "\u2728"),
-        new("Education", "\ud83c\udf93"),
-    ];
+    // Tag card definitions — canonical list lives in CategoryHelper.TagCards
     private string searchText = "";
     private List<Activity>? allActivities;
     private List<ScoredActivity>? searchResults;
@@ -496,47 +482,15 @@
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchText = e.Value?.ToString() ?? "";
-
-        if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            // Clear any selected category card so results aren't constrained
-            selectedTag = null;
-            filteredActivities = null;
-
-            // Run fuzzy search across all available activities
-            if (allActivities != null && allActivities.Count > 0)
-            {
-                searchResults = FuzzySearchService.Search(allActivities, searchText);
-            }
-            else
-            {
-                searchResults = [];
-            }
-        }
-        else
-        {
-            searchResults = null;
-        }
-
+        selectedTag = string.IsNullOrWhiteSpace(searchText) ? selectedTag : null;
+        filteredActivities = string.IsNullOrWhiteSpace(searchText) ? filteredActivities : null;
+        searchResults = string.IsNullOrWhiteSpace(searchText) ? null : FuzzySearchService.Search(allActivities ?? [], searchText);
         StateHasChanged();
     }
 
-    private IEnumerable<Activity> GetFilteredRecent()
-    {
-        if (recentActivities == null) return [];
-        if (string.IsNullOrWhiteSpace(searchText)) return recentActivities;
+    private IEnumerable<Activity> GetFilteredRecent() =>
+        FuzzySearchService.SearchOrAll(recentActivities ?? [], searchText);
 
-        // Use fuzzy search for recently viewed too
-        var scored = FuzzySearchService.Search(recentActivities, searchText);
-        return scored.Select(s => s.Activity);
-    }
-
-    private static string GetFirstTag(string? category)
-    {
-        if (string.IsNullOrWhiteSpace(category)) return "";
-        var idx = category.IndexOf(',');
-        return idx >= 0 ? category[..idx].Trim() : category.Trim();
-    }
 
     private async Task OnTagSelected(string tagName)
     {
@@ -571,29 +525,11 @@
         {
             var status = await ActivityService.GetQuotaStatusAsync();
             if (status == null) return;
-
-            var items = new[]
+            var warning = QuotaWarningHelper.GetWarning(status);
+            if (warning != null)
             {
-                ("Nearby Search", status.NearbySearch),
-                ("Place Details", status.PlaceDetails),
-                ("Photos", status.Photos),
-                ("Geocoding", status.Geocoding)
-            };
-
-            var worst = items.MaxBy(x => x.Item2.Percentage);
-            if (worst.Item2.Percentage >= 95)
-            {
-                quotaWarningLevel = "critical";
-                quotaWarningMessage = $"Daily API limit nearly reached — discovery may be limited ({worst.Item1}: {worst.Item2.Used}/{worst.Item2.Limit})";
-            }
-            else if (worst.Item2.Percentage >= 80)
-            {
-                quotaWarningLevel = "warning";
-                quotaWarningMessage = $"API usage: {worst.Item1} at {worst.Item2.Used}/{worst.Item2.Limit} today";
-            }
-
-            if (quotaWarningMessage != null)
-            {
+                quotaWarningLevel = warning.Level;
+                quotaWarningMessage = warning.Message;
                 await InvokeAsync(StateHasChanged);
             }
         }
@@ -641,27 +577,23 @@
 
         try
         {
-            List<Activity> matchingActivities;
+            List<Activity> source;
+            double? lat = null, lng = null;
 
             if (hasActiveLocation)
             {
                 var radiusMeters = (int)(HomeDiscoverRadiusMiles * MetersPerMile);
-                var activities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
-                matchingActivities = activities
-                    .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
-                    .OrderBy(a => GetDistanceValue(a))
-                    .ThenByDescending(a => a.Rating)
-                    .ToList();
+                source = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
+                lat = activeLat;
+                lng = activeLng;
             }
             else
             {
                 Logger.LogInformation("Home tag load: no active location, falling back to full list for tag={Tag}", tagName);
-                var allActivities = await ActivityService.ListActivitiesAsync();
-                matchingActivities = allActivities
-                    .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
-                    .OrderByDescending(a => a.Rating)
-                    .ToList();
+                source = await ActivityService.ListActivitiesAsync();
             }
+
+            var matchingActivities = ActivityFilterService.FilterAndSortByTag(source, tagName, lat, lng);
 
             if (generation != cacheGeneration)
             {
@@ -780,54 +712,13 @@
         Navigation.NavigateTo($"/activity/{id}");
     }
 
-    private static List<string> GetTagList(string? category)
-    {
-        if (string.IsNullOrEmpty(category)) return [];
-        return category.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
+    private double GetDistanceValue(Activity activity) =>
+        hasActiveLocation
+            ? GeoCalculator.HaversineDistance(activeLat, activeLng, activity.Latitude, activity.Longitude)
+            : double.MaxValue;
 
-    private static string GetFirstTagIcon(string? category)
-    {
-        var tags = GetTagList(category);
-        if (tags.Count == 0) return "\ud83d\udccd";
-        var first = tags[0];
-        return GetTagIcon(first);
-    }
-
-    private static string GetTagIcon(string? tagName)
-    {
-        if (string.IsNullOrWhiteSpace(tagName)) return "\ud83d\udccd";
-        var match = tagCards.FirstOrDefault(t => t.Name == tagName);
-        return match?.Emoji ?? "\ud83d\udccd";
-    }
-
-    private string FormatCost(double cost)
-    {
-        if (cost == 0) return "Free";
-        return $"${cost:F2}";
-    }
-
-    private string GetDistance(Activity activity)
-    {
-        if (!hasActiveLocation) return "?";
-        return GetDistanceValue(activity).ToString("0.1");
-    }
-
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
-
-    private double GetDistanceValue(Activity activity)
-    {
-        if (!hasActiveLocation) return double.MaxValue;
-
-        const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - activeLat);
-        var dLng = ToRad(activity.Longitude - activeLng);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c;
-    }
+    private string GetDistance(Activity activity) =>
+        hasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
 
     // ─── Location Popup (kept from original) ───
 
@@ -861,7 +752,7 @@
     {
         locationError = null;
         var input = (locationInput ?? string.Empty).Trim();
-        if (input.Length != 5 || !input.All(char.IsDigit))
+        if (!ZipCodeValidator.IsValid(input))
         {
             locationError = "Enter a valid 5-digit ZIP code";
             return;
@@ -902,5 +793,4 @@
         ActivityService.DataChanged -= OnDataChanged;
     }
 
-    private record TagCardInfo(string Name, string Emoji);
 }

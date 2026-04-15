@@ -220,15 +220,7 @@
                 return;
             }
 
-            // Build address string and geocode
-            var addressParts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(streetAddress)) addressParts.Add(streetAddress.Trim());
-            if (!string.IsNullOrWhiteSpace(aptSuite)) addressParts.Add(aptSuite.Trim());
-            if (!string.IsNullOrWhiteSpace(newActivity.City)) addressParts.Add(newActivity.City.Trim());
-            if (!string.IsNullOrWhiteSpace(stateField)) addressParts.Add(stateField.Trim());
-            if (!string.IsNullOrWhiteSpace(zipCode)) addressParts.Add(zipCode.Trim());
-
-            var fullAddress = string.Join(", ", addressParts);
+            var fullAddress = AddressBuilder.BuildFullAddress(streetAddress, aptSuite, newActivity.City, stateField, zipCode);
 
             if (string.IsNullOrWhiteSpace(fullAddress))
             {

@@ -159,17 +159,17 @@
                             <img src="@activity.ImageUrl" alt="@activity.Name"
                                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                             <div class="image-placeholder" style="display:none;">
-                                <span>@GetCategoryIcon(activity.Category)</span>
+                                <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                             </div>
                         }
                         else
                         {
                             <div class="image-placeholder">
-                                <span>@GetCategoryIcon(activity.Category)</span>
+                                <span>@CategoryHelper.GetFirstTagIcon(activity.Category)</span>
                             </div>
                         }
                         @{
-                            var tags = GetTagList(activity.Category);
+                            var tags = CategoryHelper.GetTagList(activity.Category);
                         }
                         @if (tags.Count > 0)
                         {
@@ -187,7 +187,7 @@
                             <span class="rating-text">@activity.Rating.ToString("0.0")</span>
                         </div>
                         <div class="card-details">
-                            <span class="card-cost">@FormatCost(activity.Cost)</span>
+                            <span class="card-cost">@ActivityFormatter.FormatCost(activity.Cost)</span>
                             <span class="card-distance">@GetDistance(activity) mi</span>
                         </div>
                     </div>
@@ -332,125 +332,33 @@
     private void ApplyFilters()
     {
         if (allActivities == null) return;
-
-        IEnumerable<Activity> query;
-
-        if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            // Use fuzzy search as the base
-            var scored = FuzzySearchService.Search(allActivities, searchText.Trim());
-            query = scored.Select(s => s.Activity);
-
-            // Only apply dropdown filters if the toggle is on
-            if (useFilters)
-            {
-                query = ApplyDropdownFilters(query);
-            }
-        }
-        else
-        {
-            // No search text: always apply dropdown filters (existing behavior)
-            query = ApplyDropdownFilters(allActivities);
-        }
-
-        filteredActivities = query.ToList();
+        filteredActivities = ActivityFilterService.Filter(allActivities, searchText, useFilters, BuildFilterCriteria());
         StateHasChanged();
     }
 
-    private IEnumerable<Activity> ApplyDropdownFilters(IEnumerable<Activity> query)
+    private ActivityFilterCriteria BuildFilterCriteria() => new()
     {
-        if (!string.IsNullOrEmpty(selectedCost))
-        {
-            query = selectedCost switch
-            {
-                "free" => query.Where(a => a.Cost == 0),
-                "$" => query.Where(a => a.Cost >= 0 && a.Cost < 15),
-                "$$" => query.Where(a => a.Cost >= 15 && a.Cost <= 50),
-                "$$$" => query.Where(a => a.Cost > 50),
-                _ => query
-            };
-        }
-
-        if (!string.IsNullOrEmpty(selectedCategory))
-        {
-            query = query.Where(a => HasTag(a.Category, selectedCategory));
-        }
-
-        if (hasActiveLocation)
-        {
-            query = query.Where(a => GetDistanceValue(a) <= selectedRadius);
-        }
-
-        if (!string.IsNullOrEmpty(selectedAgeRange))
-        {
-            var parts = selectedAgeRange.Split('-');
-            if (parts.Length == 2 && int.TryParse(parts[0], out var minAge) && int.TryParse(parts[1], out var maxAge))
-            {
-                query = query.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
-            }
-        }
-
-        return query;
-    }
+        Cost = selectedCost,
+        Category = selectedCategory,
+        AgeRange = selectedAgeRange,
+        RadiusMiles = selectedRadius,
+        HasActiveLocation = hasActiveLocation,
+        ActiveLatitude = activeLat,
+        ActiveLongitude = activeLng,
+    };
 
     private void ViewDetail(Guid id)
     {
         Navigation.NavigateTo($"/activity/{id}");
     }
 
-    private string FormatCost(double cost)
-    {
-        if (cost == 0) return "Free";
-        return $"${cost:F2}";
-    }
-
-    private double GetDistanceValue(Activity activity)
-    {
-        if (!hasActiveLocation) return double.MaxValue;
-
-        const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - activeLat);
-        var dLng = ToRad(activity.Longitude - activeLng);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c;
-    }
+    private double GetDistanceValue(Activity activity) =>
+        hasActiveLocation
+            ? GeoCalculator.HaversineDistance(activeLat, activeLng, activity.Latitude, activity.Longitude)
+            : double.MaxValue;
 
     private string GetDistance(Activity activity) =>
         hasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
-
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
-
-    private static List<string> GetTagList(string? category)
-    {
-        if (string.IsNullOrWhiteSpace(category)) return [];
-        return category.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
-
-    private static bool HasTag(string? category, string tagName) =>
-        GetTagList(category).Any(tag => string.Equals(tag, tagName, StringComparison.OrdinalIgnoreCase));
-
-    private static string GetCategoryIcon(string? category)
-    {
-        var firstTag = GetTagList(category).FirstOrDefault();
-        return firstTag switch
-        {
-            "Restaurant" => "\ud83c\udf7d\ufe0f",
-            "Fast Food" => "\ud83c\udf54",
-            "Convenience Store" => "\ud83c\udfe0",
-            "Attractions" => "\u2b50",
-            "Outdoors" => "\ud83c\udf32",
-            "Arts & Culture" => "\ud83c\udfa8",
-            "Nightlife" => "\ud83c\udf19",
-            "Shopping" => "\ud83d\udecd\ufe0f",
-            "Fitness & Sports" => "\ud83c\udfcb\ufe0f",
-            "Wellness & Beauty" => "\u2728",
-            "Education" => "\ud83c\udf93",
-            _ => "\ud83d\udccd"
-        };
-    }
 
     private async Task ToggleLocationPopup()
     {
@@ -482,7 +390,7 @@
     {
         locationError = null;
         var input = (locationInput ?? string.Empty).Trim();
-        if (input.Length != 5 || !input.All(char.IsDigit))
+        if (!ZipCodeValidator.IsValid(input))
         {
             locationError = "Enter a valid 5-digit ZIP code";
             return;
