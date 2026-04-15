@@ -10,6 +10,7 @@ public interface IActivityService
     Task<Activity?> GetActivityAsync(Guid id);
     Task<List<Activity>> ListActivitiesAsync();
     Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null);
+    Task<List<Activity>> SearchActivitiesAsync(double lat, double lng, int radiusMeters, string searchTerm);
     Task<List<NearbyPlace>> SearchNearbyPlacesAsync(double lat, double lng, int radiusMeters, string? type = null, string? keyword = null);
     Task<PlaceDetails?> GetPlaceDetailsAsync(string placeId);
     Task<string> ReverseGeocodeAsync(double lat, double lng);

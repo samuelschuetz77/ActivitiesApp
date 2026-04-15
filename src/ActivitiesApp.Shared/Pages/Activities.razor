@@ -2,7 +2,6 @@
 @using ActivitiesApp.Shared.Models
 @using ActivitiesApp.Shared.Services
 @using Microsoft.AspNetCore.Components.Web
-@using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject ILogger<Activities> Logger
@@ -10,14 +9,13 @@
 @implements IDisposable
 
 <div class="activities-page">
-    <!-- Search + Location Row -->
     <div class="search-row">
         <div class="search-container search-container-with-toggle">
             <input type="text" class="search-input" placeholder="Search activities..."
-                   @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" />
+                   @bind="searchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
             <button class="filter-toggle-btn @(useFilters ? "active" : "")"
                     @onclick="ToggleUseFilters"
-                    title="@(useFilters ? "Filters active — click to search without filters" : "Filters off — click to apply filters")">
+                    title="@(useFilters ? "Filters active - click to search without filters" : "Filters off - click to apply filters")">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                      fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
@@ -27,7 +25,9 @@
             </button>
         </div>
         <div class="location-icon-wrapper">
-            <button class="location-btn @(hasActiveLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
+            <button class="location-btn @(LocationService.HasActiveLocation ? "active" : "")"
+                    @onclick="ToggleLocationPopup"
+                    title="Location controls">
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="10" r="3"/>
@@ -37,45 +37,108 @@
             @if (showLocationPopup)
             {
                 <div class="location-popup">
-                    @if (hasLocation)
-                    {
-                        @if (!string.IsNullOrEmpty(userAddress))
+                    <div class="location-panel-header">
+                        <div>
+                            <p class="location-panel-title">Location</p>
+                            <p class="location-panel-subtitle">@GetLocationSummary()</p>
+                        </div>
+                        <span class="location-state-pill @(LocationService.HasActiveLocation ? "active" : "inactive")">
+                            @(LocationService.HasActiveLocation ? "On" : "Off")
+                        </span>
+                    </div>
+
+                    <div class="location-actions-grid">
+                        <button class="location-action-btn @(LocationService.IsUsingCurrentLocation ? "active" : "")"
+                                @onclick="UseCurrentLocationAsync"
+                                disabled="@LocationService.IsRefreshing">
+                            Use Current Location
+                        </button>
+                        <button class="location-action-btn @(LocationService.IsLocationDisabled ? "active" : "")"
+                                @onclick="DisableLocationAsync">
+                            Disable Location
+                        </button>
+                    </div>
+
+                    <div class="location-manual-card">
+                        <label class="location-section-label" for="zip-input">Use a ZIP code</label>
+                        <div class="location-popup-edit">
+                            <input id="zip-input" class="zip-input" placeholder="Enter ZIP code" maxlength="5"
+                                   disabled="@isApplyingManualLocation"
+                                   @bind="locationInput" @bind:event="oninput" @onkeyup="OnLocationInputKeyUp" />
+                            <button class="zip-btn" disabled="@isApplyingManualLocation" @onclick="ApplyManualLocationAsync">
+                                @(isApplyingManualLocation ? "Applying..." : "Apply")
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(manualLocationStatus))
                         {
-                            <p class="location-address">@userAddress</p>
+                            <p class="location-log-meta">@manualLocationStatus</p>
+                        }
+                        @if (LocationService.HasManualLocation)
+                        {
+                            <p class="location-manual-active">ZIP override: @LocationService.ManualLocationLabel</p>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(displayAddress))
+                    {
+                        <div class="location-current-card">
+                            <p class="location-section-label">Active location</p>
+                            <p class="location-address">@displayAddress</p>
+                            @if (LocationService.HasActiveLocation)
+                            {
+                                <p class="location-coords">@LocationService.ActiveLatitude.ToString("0.0000"), @LocationService.ActiveLongitude.ToString("0.0000")</p>
+                            }
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(uiErrorMessage))
+                    {
+                        <div class="location-error-card">
+                            <p class="location-error-title">Location error</p>
+                            <p class="location-error-message">@uiErrorMessage</p>
+                            @if (!string.IsNullOrWhiteSpace(LocationService.LastErrorCode))
+                            {
+                                <p class="location-error-meta">Code: @LocationService.LastErrorCode</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(LocationService.LastDiagnostics))
+                            {
+                                <p class="location-error-meta">@LocationService.LastDiagnostics</p>
+                            }
+                        </div>
+                    }
+
+                    <div class="location-log-card">
+                        <p class="location-section-label">Recent location logs</p>
+                        @if (LocationService.RecentEvents.Count == 0)
+                        {
+                            <p class="location-log-empty">No location events yet.</p>
                         }
                         else
                         {
-                            <p class="location-address loading-text">Looking up address...</p>
+                            @foreach (var entry in LocationService.RecentEvents)
+                            {
+                                <div class="location-log-entry">
+                                    <p class="location-log-message">@entry.Message</p>
+                                    <p class="location-log-meta">
+                                        @entry.TimestampUtc.ToLocalTime().ToString("h:mm:ss tt")
+                                        @if (!string.IsNullOrWhiteSpace(entry.ErrorCode))
+                                        {
+                                            <span> | @entry.ErrorCode</span>
+                                        }
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(entry.Details))
+                                    {
+                                        <p class="location-log-details">@entry.Details</p>
+                                    }
+                                </div>
+                            }
                         }
-                        <p class="location-coords">@userLat.ToString("0.0000"), @userLng.ToString("0.0000")</p>
-                    }
-                    else
-                    {
-                        <p class="location-address">GPS not available</p>
-                    }
-                    <div class="location-popup-edit">
-                        <input class="zip-input" placeholder="Enter ZIP code" maxlength="5"
-                               @bind="locationInput" @bind:event="oninput" @onkeyup="OnLocationInputKeyUp" />
-                        <button class="zip-btn" @onclick="ApplyManualLocationAsync">Apply</button>
                     </div>
-                    @if (locationError != null)
-                    {
-                        <p class="location-error" style="color:red;font-size:0.85em;margin:4px 0;">@locationError</p>
-                    }
-                    @if (hasManualLocation && hasLocation)
-                    {
-                        <button class="zip-btn" style="margin-top:6px;width:100%;" @onclick="UseCurrentLocation">Use Current Location</button>
-                    }
-                    @if (hasManualLocation)
-                    {
-                        <p class="location-override-label">Using: @LocationService.ManualLocationLabel</p>
-                    }
                 </div>
             }
         </div>
     </div>
 
-    <!-- Filter Bar -->
     <div class="filter-bar">
         <div class="filter-item">
             <label>Radius</label>
@@ -145,7 +208,14 @@
     }
     else if (filteredActivities != null && !filteredActivities.Any())
     {
-        <div class="no-results">No activities found matching your filters.</div>
+        <div class="location-error-card">
+            <p class="location-error-title">@emptyStateTitle</p>
+            <p class="location-error-message">@emptyStateDetail</p>
+            @foreach (var reason in emptyStateReasons)
+            {
+                <p class="location-error-meta">- @reason</p>
+            }
+        </div>
     }
     else if (filteredActivities != null)
     {
@@ -188,7 +258,7 @@
                         </div>
                         <div class="card-details">
                             <span class="card-cost">@FormatCost(activity.Cost)</span>
-                            <span class="card-distance">@GetDistance(activity) mi</span>
+                            <span class="card-distance" title="@GetDistanceDebugLabel(activity)">@GetDistance(activity) mi</span>
                         </div>
                     </div>
                 </div>
@@ -199,6 +269,7 @@
 
 @code {
     private List<Activity>? allActivities;
+    private List<Activity>? defaultActivities;
     private List<Activity>? filteredActivities;
 
     private string searchText = "";
@@ -210,64 +281,84 @@
     private string? statusMessage;
     private string? statusDetail;
     private bool isLoadingActivities;
-
-    // Location popup
     private bool showLocationPopup;
-    private string? userAddress;
     private string locationInput = "";
     private string? locationError;
+    private string? displayAddress;
+    private string? manualLocationStatus;
+    private bool isApplyingManualLocation;
+    private bool isRemoteSearchLoading;
+    private string emptyStateTitle = "No activities matched the current filters.";
+    private string emptyStateDetail = "The current result set did not contain anything that survived every filter.";
+    private List<string> emptyStateReasons = [];
+    private readonly HashSet<string> _distanceDebugKeys = [];
+    private string _lastAppliedLocationSignature = "";
+    private string? _lastReverseGeocodeSignature;
 
-    // GPS from service
-    private bool hasLocation => LocationService.HasLocation;
-    private double userLat => LocationService.Latitude;
-    private double userLng => LocationService.Longitude;
-
-    // Manual + active location from shared singleton
-    private bool hasManualLocation => LocationService.HasManualLocation;
-    private bool hasActiveLocation => LocationService.HasActiveLocation;
-    private double activeLat => LocationService.ActiveLatitude;
-    private double activeLng => LocationService.ActiveLongitude;
+    private string? uiErrorMessage => locationError ?? LocationService.LastError;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (!firstRender)
         {
-            LocationService.LocationChanged += OnLocationChanged;
-            ActivityService.DataChanged += OnDataChanged;
-            LocationService.StartTracking();
-
-            await LoadActivities();
+            return;
         }
+
+        LocationService.LocationChanged += OnLocationChanged;
+        ActivityService.DataChanged += OnDataChanged;
+        LocationService.StartTracking();
+
+        await RefreshLocationDisplayAsync();
+        await LoadActivities(forceReload: true);
     }
 
     private async void OnLocationChanged()
     {
-        if (!hasManualLocation)
+        await InvokeAsync(async () =>
         {
-            await InvokeAsync(async () =>
+            await RefreshLocationDisplayAsync();
+
+            if (LocationService.IsRefreshing)
             {
-                await LoadActivities();
-            });
-        }
+                StateHasChanged();
+                return;
+            }
+
+            var signature = GetLocationSignature();
+            if (!string.Equals(signature, _lastAppliedLocationSignature, StringComparison.Ordinal))
+            {
+                await LoadActivities(forceReload: true);
+            }
+            else
+            {
+                ApplyFilters();
+            }
+        });
     }
 
     private async void OnDataChanged()
     {
-        // Re-read from cache without triggering another discover (avoids loop)
         await InvokeAsync(async () =>
         {
-            allActivities = await ActivityService.ListActivitiesAsync();
+            defaultActivities = await ActivityService.ListActivitiesAsync();
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                allActivities = defaultActivities;
+            }
             ApplyFilters();
         });
     }
 
-    private async Task LoadActivities()
+    private async Task LoadActivities(bool forceReload = false)
     {
         isLoadingActivities = true;
         statusDetail = null;
+
         try
         {
-            if (hasActiveLocation)
+            _lastAppliedLocationSignature = GetLocationSignature();
+
+            if (LocationService.HasActiveLocation)
             {
                 await DiscoverNearby();
             }
@@ -275,7 +366,8 @@
             {
                 statusMessage = "Loading saved activities from the database...";
                 StateHasChanged();
-                allActivities = await ActivityService.ListActivitiesAsync();
+                defaultActivities = await ActivityService.ListActivitiesAsync();
+                allActivities = defaultActivities;
                 statusMessage = null;
                 statusDetail = null;
                 ApplyFilters();
@@ -299,21 +391,101 @@
     private async Task DiscoverNearby()
     {
         statusMessage = "Discovering activities nearby...";
+        statusDetail = LocationService.HasManualLocation
+            ? $"Using ZIP override: {LocationService.ManualLocationLabel}"
+            : "Using your current location.";
         StateHasChanged();
 
         var radiusMeters = (int)(selectedRadius * 1609.34);
-        Logger.LogInformation("Activities page discovering nearby at ({Lat},{Lng}) radius={RadiusMiles}mi",
-            activeLat, activeLng, selectedRadius);
-        allActivities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters);
+        Logger.LogInformation(
+            "Activities page discovering nearby at ({Lat},{Lng}) radius={RadiusMiles}mi source={Source}",
+            LocationService.ActiveLatitude,
+            LocationService.ActiveLongitude,
+            selectedRadius,
+            LocationService.HasManualLocation ? "manual" : "current");
+
+        defaultActivities = await ActivityService.DiscoverActivitiesAsync(
+            LocationService.ActiveLatitude,
+            LocationService.ActiveLongitude,
+            radiusMeters);
+        allActivities = defaultActivities;
 
         statusMessage = null;
         statusDetail = null;
         ApplyFilters();
     }
 
+    private async Task OnSearchChangedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            allActivities = defaultActivities;
+            statusMessage = null;
+            statusDetail = null;
+            ApplyFilters();
+            return;
+        }
+
+        allActivities = defaultActivities;
+        ApplyFilters();
+        if (filteredActivities != null && filteredActivities.Count > 0)
+        {
+            return;
+        }
+
+        if (!LocationService.HasActiveLocation)
+        {
+            ApplyFilters();
+            return;
+        }
+
+        var term = searchText.Trim();
+        if (term.Length < 2)
+        {
+            ApplyFilters();
+            return;
+        }
+
+        await RunRemoteSearchAsync(term);
+    }
+
+    private async Task RunRemoteSearchAsync(string term)
+    {
+        try
+        {
+            isRemoteSearchLoading = true;
+            statusMessage = $"Searching for \"{term}\"...";
+            statusDetail = "The page is asking the API for keyword matches near the current location.";
+            StateHasChanged();
+
+            var radiusMeters = (int)(selectedRadius * 1609.34);
+            var results = await ActivityService.SearchActivitiesAsync(
+                LocationService.ActiveLatitude,
+                LocationService.ActiveLongitude,
+                radiusMeters,
+                term);
+
+            allActivities = results;
+            Logger.LogInformation(
+                "Activities page remote search completed: term={Term}, resultCount={ResultCount}, radius={Radius}, activeLat={Lat}, activeLng={Lng}",
+                term, results.Count, selectedRadius, LocationService.ActiveLatitude, LocationService.ActiveLongitude);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Activities page remote search failed for {Term}", term);
+            statusDetail = ex.Message;
+        }
+        finally
+        {
+            isRemoteSearchLoading = false;
+            statusMessage = null;
+            ApplyFilters();
+        }
+    }
+
     private async Task OnRadiusChanged()
     {
-        if (hasActiveLocation)
+        if (LocationService.HasActiveLocation)
         {
             await DiscoverNearby();
         }
@@ -331,66 +503,69 @@
 
     private void ApplyFilters()
     {
-        if (allActivities == null) return;
+        if (allActivities == null)
+        {
+            return;
+        }
 
-        IEnumerable<Activity> query;
+        var workingSet = allActivities.AsEnumerable();
+        var initialCount = workingSet.Count();
+        var searchCount = initialCount;
+        var costCount = initialCount;
+        var categoryCount = initialCount;
+        var distanceCount = initialCount;
+        var ageCount = initialCount;
 
         if (!string.IsNullOrWhiteSpace(searchText))
         {
-            // Use fuzzy search as the base
-            var scored = FuzzySearchService.Search(allActivities, searchText.Trim());
-            query = scored.Select(s => s.Activity);
-
-            // Only apply dropdown filters if the toggle is on
-            if (useFilters)
-            {
-                query = ApplyDropdownFilters(query);
-            }
-        }
-        else
-        {
-            // No search text: always apply dropdown filters (existing behavior)
-            query = ApplyDropdownFilters(allActivities);
+            var term = searchText.Trim();
+            workingSet = workingSet.Where(a =>
+                (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+            searchCount = workingSet.Count();
         }
 
-        filteredActivities = query.ToList();
-        StateHasChanged();
-    }
-
-    private IEnumerable<Activity> ApplyDropdownFilters(IEnumerable<Activity> query)
-    {
-        if (!string.IsNullOrEmpty(selectedCost))
+        if (useFilters && !string.IsNullOrEmpty(selectedCost))
         {
-            query = selectedCost switch
+            workingSet = selectedCost switch
             {
-                "free" => query.Where(a => a.Cost == 0),
-                "$" => query.Where(a => a.Cost >= 0 && a.Cost < 15),
-                "$$" => query.Where(a => a.Cost >= 15 && a.Cost <= 50),
-                "$$$" => query.Where(a => a.Cost > 50),
-                _ => query
+                "free" => workingSet.Where(a => a.Cost == 0),
+                "$" => workingSet.Where(a => a.Cost >= 0 && a.Cost < 15),
+                "$$" => workingSet.Where(a => a.Cost >= 15 && a.Cost <= 50),
+                "$$$" => workingSet.Where(a => a.Cost > 50),
+                _ => workingSet
             };
+            costCount = workingSet.Count();
         }
 
-        if (!string.IsNullOrEmpty(selectedCategory))
+        if (useFilters && !string.IsNullOrEmpty(selectedCategory))
         {
-            query = query.Where(a => HasTag(a.Category, selectedCategory));
+            workingSet = workingSet.Where(a => HasTag(a.Category, selectedCategory));
+            categoryCount = workingSet.Count();
         }
 
-        if (hasActiveLocation)
+        if (useFilters && LocationService.HasActiveLocation)
         {
-            query = query.Where(a => GetDistanceValue(a) <= selectedRadius);
+            workingSet = workingSet.Where(a => GetDistanceValue(a) <= selectedRadius);
+            distanceCount = workingSet.Count();
         }
 
-        if (!string.IsNullOrEmpty(selectedAgeRange))
+        if (useFilters && !string.IsNullOrEmpty(selectedAgeRange))
         {
             var parts = selectedAgeRange.Split('-');
             if (parts.Length == 2 && int.TryParse(parts[0], out var minAge) && int.TryParse(parts[1], out var maxAge))
             {
-                query = query.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
+                workingSet = workingSet.Where(a => a.MinAge <= maxAge && a.MaxAge >= minAge);
             }
         }
 
-        return query;
+        filteredActivities = workingSet.ToList();
+        ageCount = filteredActivities.Count;
+        UpdateEmptyState(initialCount, searchCount, costCount, categoryCount, distanceCount, ageCount);
+        LogVisibleDistanceDiagnostics();
+        StateHasChanged();
     }
 
     private void ViewDetail(Guid id)
@@ -400,32 +575,49 @@
 
     private string FormatCost(double cost)
     {
-        if (cost == 0) return "Free";
+        if (cost == 0)
+        {
+            return "Free";
+        }
+
         return $"${cost:F2}";
     }
 
     private double GetDistanceValue(Activity activity)
     {
-        if (!hasActiveLocation) return double.MaxValue;
+        if (!LocationService.HasActiveLocation)
+        {
+            return double.MaxValue;
+        }
 
-        const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - activeLat);
-        var dLng = ToRad(activity.Longitude - activeLng);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c;
+        return GeoMath.HaversineMiles(
+            LocationService.ActiveLatitude,
+            LocationService.ActiveLongitude,
+            activity.Latitude,
+            activity.Longitude);
     }
 
     private string GetDistance(Activity activity) =>
-        hasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
+        LocationService.HasActiveLocation ? GetDistanceValue(activity).ToString("0.1") : "?";
 
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
+    private string GetDistanceDebugLabel(Activity activity)
+    {
+        if (!LocationService.HasActiveLocation)
+        {
+            return "No active location";
+        }
+
+        var miles = GetDistanceValue(activity);
+        return $"from {LocationService.ActiveLatitude:0.0000},{LocationService.ActiveLongitude:0.0000} to {activity.Latitude:0.0000},{activity.Longitude:0.0000} = {miles:0.000} mi";
+    }
 
     private static List<string> GetTagList(string? category)
     {
-        if (string.IsNullOrWhiteSpace(category)) return [];
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return [];
+        }
+
         return category.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
     }
 
@@ -455,18 +647,46 @@
     private async Task ToggleLocationPopup()
     {
         showLocationPopup = !showLocationPopup;
-
-        if (showLocationPopup && hasLocation && string.IsNullOrEmpty(userAddress))
+        if (showLocationPopup)
         {
-            try
-            {
-                userAddress = await ActivityService.ReverseGeocodeAsync(userLat, userLng);
-                StateHasChanged();
-            }
-            catch
-            {
-                userAddress = "Address unavailable";
-            }
+            await RefreshLocationDisplayAsync();
+        }
+    }
+
+    private async Task RefreshLocationDisplayAsync()
+    {
+        if (LocationService.HasManualLocation)
+        {
+            displayAddress = LocationService.ManualLocationLabel;
+            return;
+        }
+
+        if (!LocationService.HasLocation)
+        {
+            displayAddress = LocationService.IsTrackingEnabled
+                ? "Current location unavailable"
+                : "Location is disabled";
+            return;
+        }
+
+        var signature = $"{LocationService.Latitude:0.0000}:{LocationService.Longitude:0.0000}";
+        if (string.Equals(signature, _lastReverseGeocodeSignature, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(displayAddress))
+        {
+            return;
+        }
+
+        displayAddress = "Looking up current address...";
+        _lastReverseGeocodeSignature = signature;
+
+        try
+        {
+            displayAddress = await ActivityService.ReverseGeocodeAsync(LocationService.Latitude, LocationService.Longitude);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Activities page reverse geocode failed");
+            displayAddress = "Current address unavailable";
         }
     }
 
@@ -481,41 +701,165 @@
     private async Task ApplyManualLocationAsync()
     {
         locationError = null;
+        manualLocationStatus = null;
         var input = (locationInput ?? string.Empty).Trim();
         if (input.Length != 5 || !input.All(char.IsDigit))
         {
-            locationError = "Enter a valid 5-digit ZIP code";
+            locationError = "Enter a valid 5-digit ZIP code.";
             return;
         }
 
         try
         {
+            isApplyingManualLocation = true;
+            manualLocationStatus = $"Looking up ZIP {input}...";
+            StateHasChanged();
+
             var lookup = await ActivityService.LookupZipCodeAsync(input);
             if (lookup == null)
             {
-                locationError = "ZIP code not found";
+                locationError = "ZIP code not found.";
+                manualLocationStatus = $"ZIP {input} did not return a geocoding result.";
                 return;
             }
 
             LocationService.SetManualLocation(lookup.Latitude, lookup.Longitude, lookup.FormattedAddress);
-            showLocationPopup = false;
-
-            Logger.LogInformation("Activities page manual location set to ZIP {Zip} at ({Lat},{Lng})", input, activeLat, activeLng);
-
-            await LoadActivities();
+            displayAddress = lookup.FormattedAddress;
+            showLocationPopup = true;
+            manualLocationStatus = $"ZIP {input} resolved to {lookup.FormattedAddress}.";
+            Logger.LogInformation("Activities page manual location set to ZIP {Zip}", input);
+            await LoadActivities(forceReload: true);
         }
         catch (Exception ex)
         {
-            locationError = "Location lookup failed";
+            locationError = ex.Message;
+            manualLocationStatus = $"ZIP {input} lookup failed.";
             Logger.LogError(ex, "Activities page location lookup failed for {Input}", input);
+        }
+        finally
+        {
+            isApplyingManualLocation = false;
+            StateHasChanged();
         }
     }
 
-    private async Task UseCurrentLocation()
+    private void UpdateEmptyState(int initialCount, int searchCount, int costCount, int categoryCount, int distanceCount, int ageCount)
     {
+        if (filteredActivities == null || filteredActivities.Count > 0)
+        {
+            emptyStateTitle = "No activities matched the current filters.";
+            emptyStateDetail = "The current result set did not contain anything that survived every filter.";
+            emptyStateReasons = [];
+            return;
+        }
+
+        emptyStateTitle = "No activities are visible right now.";
+        emptyStateDetail = "The page loaded data, but one or more filters reduced the visible cards to zero.";
+        emptyStateReasons =
+        [
+            initialCount == 0 ? "The base activity payload was empty before text filtering even started." : $"The base activity payload contained {initialCount} cards.",
+            !string.IsNullOrWhiteSpace(searchText) ? $"Text search \"{searchText.Trim()}\" reduced the set to {searchCount} cards." : "No text search is active.",
+            !string.IsNullOrEmpty(selectedCost) ? $"The cost filter reduced the set to {costCount} cards." : "No cost filter is active.",
+            !string.IsNullOrEmpty(selectedCategory) ? $"The category filter reduced the set to {categoryCount} cards." : "No category filter is active.",
+            LocationService.HasActiveLocation ? $"The {selectedRadius} mile distance filter reduced the set to {distanceCount} cards." : "No active location means no distance filter was applied.",
+            !string.IsNullOrEmpty(selectedAgeRange) ? $"The age-range filter reduced the set to {ageCount} cards." : "No age-range filter is active.",
+            isRemoteSearchLoading ? "A remote keyword search is still in progress." : "No remote keyword search is running.",
+            !string.IsNullOrWhiteSpace(statusDetail) ? $"Last status detail: {statusDetail}" : "No API status detail was captured.",
+            "If the text search finds nothing, the earlier nearby-discover payload may have omitted the place before text filtering began.",
+            "If distance values look wrong, compare the tooltip on the mileage text to confirm the exact coordinates used."
+        ];
+
+        Logger.LogWarning(
+            "Activities page empty state: initial={Initial}, search={Search}, cost={Cost}, category={Category}, distance={Distance}, age={Age}, searchText={SearchText}, selectedCategory={SelectedCategory}, radius={Radius}",
+            initialCount, searchCount, costCount, categoryCount, distanceCount, ageCount,
+            searchText ?? "", selectedCategory ?? "", selectedRadius);
+    }
+
+    private void LogVisibleDistanceDiagnostics()
+    {
+        if (!LocationService.HasActiveLocation || filteredActivities == null)
+        {
+            return;
+        }
+
+        foreach (var activity in filteredActivities.Take(20))
+        {
+            var miles = GetDistanceValue(activity);
+            var key = $"{GetLocationSignature()}|{activity.Id}|{activity.Latitude:0.000000}|{activity.Longitude:0.000000}|{miles:0.000}";
+            if (_distanceDebugKeys.Add(key))
+            {
+                Logger.LogInformation(
+                    "Activities page distance snapshot: activityId={ActivityId}, placeId={PlaceId}, name={Name}, city={City}, activeLat={ActiveLat}, activeLng={ActiveLng}, activityLat={ActivityLat}, activityLng={ActivityLng}, miles={Miles}",
+                    activity.Id,
+                    activity.PlaceId ?? "",
+                    activity.Name ?? "",
+                    activity.City ?? "",
+                    LocationService.ActiveLatitude,
+                    LocationService.ActiveLongitude,
+                    activity.Latitude,
+                    activity.Longitude,
+                    miles);
+            }
+        }
+    }
+
+    private async Task UseCurrentLocationAsync()
+    {
+        locationError = null;
         LocationService.ClearManualLocation();
-        showLocationPopup = false;
-        await LoadActivities();
+        await LocationService.EnableTrackingAsync();
+        await RefreshLocationDisplayAsync();
+        await LoadActivities(forceReload: true);
+    }
+
+    private async Task DisableLocationAsync()
+    {
+        locationError = null;
+        LocationService.DisableTracking();
+        displayAddress = LocationService.HasManualLocation
+            ? LocationService.ManualLocationLabel
+            : "Location is disabled";
+        await LoadActivities(forceReload: true);
+    }
+
+    private string GetLocationSignature()
+    {
+        if (LocationService.HasManualLocation)
+        {
+            return $"manual:{LocationService.ManualLatitude:0.0000}:{LocationService.ManualLongitude:0.0000}";
+        }
+
+        if (LocationService.IsUsingCurrentLocation)
+        {
+            return $"current:{LocationService.Latitude:0.0000}:{LocationService.Longitude:0.0000}";
+        }
+
+        return "none";
+    }
+
+    private string GetLocationSummary()
+    {
+        if (LocationService.HasManualLocation)
+        {
+            return "Using your ZIP override.";
+        }
+
+        if (LocationService.IsUsingCurrentLocation)
+        {
+            return "Using your device's current location.";
+        }
+
+        if (LocationService.IsRefreshing)
+        {
+            return "Requesting your current location...";
+        }
+
+        if (!string.IsNullOrWhiteSpace(LocationService.LastError))
+        {
+            return "Current location failed. Check the error details below.";
+        }
+
+        return "Location is currently off.";
     }
 
     public void Dispose()

@@ -88,6 +88,19 @@ public class ActivityGrpcClient : IActivityService
         return activities;
     }
 
+    public async Task<List<Activity>> SearchActivitiesAsync(double lat, double lng, int radiusMeters, string searchTerm)
+    {
+        var activities = await DiscoverActivitiesAsync(lat, lng, radiusMeters);
+        var term = searchTerm.Trim();
+
+        return activities.Where(a =>
+            (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+    }
+
     // ─── Google Maps ───
 
     public async Task<List<NearbyPlace>> SearchNearbyPlacesAsync(

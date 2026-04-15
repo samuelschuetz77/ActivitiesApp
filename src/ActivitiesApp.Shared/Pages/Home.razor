@@ -46,9 +46,16 @@
                     }
                     <div class="location-popup-edit">
                         <input class="zip-input" placeholder="Enter ZIP code" maxlength="5"
+                               disabled="@isApplyingManualLocation"
                                @bind="locationInput" @bind:event="oninput" @onkeyup="OnLocationInputKeyUp" />
-                        <button class="zip-btn" @onclick="ApplyManualLocationAsync">Apply</button>
+                        <button class="zip-btn" disabled="@isApplyingManualLocation" @onclick="ApplyManualLocationAsync">
+                            @(isApplyingManualLocation ? "Applying..." : "Apply")
+                        </button>
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(manualLocationStatus))
+                    {
+                        <p class="location-log-meta">@manualLocationStatus</p>
+                    }
                     @if (locationError != null)
                     {
                         <p class="location-error" style="color:red;font-size:0.85em;margin:4px 0;">@locationError</p>
@@ -192,7 +199,7 @@
     <!-- Tag Cards Section -->
     <div class="home-section">
         <h2 class="home-section-title">What are you looking for?</h2>
-        <p class="home-section-subtitle">Tap a tag to load places near your current or selected location.</p>
+        <p class="home-section-subtitle">Choose a tag to load places near your current or selected location.</p>
         <div class="tag-cards-grid">
             @foreach (var tag in tagCards)
             {
@@ -220,7 +227,17 @@
             }
             else if (filteredActivities != null && !filteredActivities.Any())
             {
-                <div class="no-results">No @selectedTag activities found nearby.</div>
+                <div class="location-error-card">
+                    <p class="location-error-title">@filteredEmptyTitle</p>
+                    <p class="location-error-message">@filteredEmptyDetail</p>
+                    @if (filteredPossibleReasons.Count > 0)
+                    {
+                        @foreach (var reason in filteredPossibleReasons)
+                        {
+                            <p class="location-error-meta">- @reason</p>
+                        }
+                    }
+                </div>
             }
             else if (filteredActivities != null)
             {
@@ -322,6 +339,11 @@
     private string? userAddress;
     private string locationInput = "";
     private string? locationError;
+    private string? manualLocationStatus;
+    private bool isApplyingManualLocation;
+    private string filteredEmptyTitle = "No category cards loaded.";
+    private string filteredEmptyDetail = "The app did not get any cards back for this category.";
+    private List<string> filteredPossibleReasons = [];
 
     // GPS from service
     private bool hasLocation => LocationService.HasLocation;
@@ -642,16 +664,47 @@
         try
         {
             List<Activity> matchingActivities;
+            var diagnostic = new TagLoadDiagnostic { TagName = tagName, Trigger = trigger, HasActiveLocation = hasActiveLocation };
 
             if (hasActiveLocation)
             {
                 var radiusMeters = (int)(HomeDiscoverRadiusMiles * MetersPerMile);
-                var activities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
-                matchingActivities = activities
+                var broadActivities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters);
+                diagnostic.BroadDiscoverCount = broadActivities.Count;
+
+                matchingActivities = broadActivities
                     .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
                     .OrderBy(a => GetDistanceValue(a))
                     .ThenByDescending(a => a.Rating)
                     .ToList();
+
+                diagnostic.BroadTagMatchCount = matchingActivities.Count;
+
+                if (matchingActivities.Count == 0)
+                {
+                    await Task.Delay(900);
+                    var localRetry = await ActivityService.ListActivitiesAsync();
+                    matchingActivities = localRetry
+                        .Where(a => GeoMath.HaversineMiles(activeLat, activeLng, a.Latitude, a.Longitude) <= HomeDiscoverRadiusMiles)
+                        .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                        .OrderBy(a => GeoMath.HaversineMiles(activeLat, activeLng, a.Latitude, a.Longitude))
+                        .ThenByDescending(a => a.Rating)
+                        .ToList();
+
+                    diagnostic.LocalRetryCount = matchingActivities.Count;
+                }
+
+                if (matchingActivities.Count == 0)
+                {
+                    var targetedActivities = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
+                    diagnostic.TargetedDiscoverCount = targetedActivities.Count;
+                    matchingActivities = targetedActivities
+                        .Where(a => GetTagList(a.Category).Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                        .OrderBy(a => GetDistanceValue(a))
+                        .ThenByDescending(a => a.Rating)
+                        .ToList();
+                    diagnostic.TargetedTagMatchCount = matchingActivities.Count;
+                }
             }
             else
             {
@@ -678,12 +731,18 @@
 
             if (matchingActivities.Count == 0)
             {
+                UpdateFilteredEmptyState(diagnostic);
                 Logger.LogWarning(
-                    "Home tag load returned EMPTY: tag={Tag}, trigger={Trigger}, generation={Generation}, elapsed={Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
-                    tagName, trigger, generation, loadSw.ElapsedMilliseconds, hasActiveLocation, activeLat, activeLng);
+                    "Home tag load returned EMPTY: tag={Tag}, trigger={Trigger}, generation={Generation}, elapsed={Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}, broadCount={BroadCount}, broadTagMatchCount={BroadTagMatchCount}, localRetryCount={LocalRetryCount}, targetedCount={TargetedCount}, targetedTagMatchCount={TargetedTagMatchCount}, locationError={LocationError}",
+                    tagName, trigger, generation, loadSw.ElapsedMilliseconds, hasActiveLocation, activeLat, activeLng,
+                    diagnostic.BroadDiscoverCount, diagnostic.BroadTagMatchCount, diagnostic.LocalRetryCount,
+                    diagnostic.TargetedDiscoverCount, diagnostic.TargetedTagMatchCount, LocationService.LastError ?? "");
             }
             else
             {
+                filteredEmptyTitle = "";
+                filteredEmptyDetail = "";
+                filteredPossibleReasons = [];
                 Logger.LogInformation(
                     "Home tag load completed: tag={Tag}, trigger={Trigger}, generation={Generation}, count={Count}, withImages={ImageCount}, fastImages={Fast}, slowImages={Slow}, elapsed={Ms}ms, sampleImages={SampleImages}",
                     tagName,
@@ -813,20 +872,11 @@
         return GetDistanceValue(activity).ToString("0.1");
     }
 
-    private static double ToRad(double deg) => deg * Math.PI / 180.0;
-
     private double GetDistanceValue(Activity activity)
     {
         if (!hasActiveLocation) return double.MaxValue;
 
-        const double R = 3958.8;
-        var dLat = ToRad(activity.Latitude - activeLat);
-        var dLng = ToRad(activity.Longitude - activeLng);
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRad(activeLat)) * Math.Cos(ToRad(activity.Latitude)) *
-                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c;
+        return GeoMath.HaversineMiles(activeLat, activeLng, activity.Latitude, activity.Longitude);
     }
 
     // ─── Location Popup (kept from original) ───
@@ -860,6 +910,7 @@
     private async Task ApplyManualLocationAsync()
     {
         locationError = null;
+        manualLocationStatus = null;
         var input = (locationInput ?? string.Empty).Trim();
         if (input.Length != 5 || !input.All(char.IsDigit))
         {
@@ -869,24 +920,42 @@
 
         try
         {
+            isApplyingManualLocation = true;
+            manualLocationStatus = $"Looking up ZIP {input}...";
+            StateHasChanged();
+
             var lookup = await ActivityService.LookupZipCodeAsync(input);
             if (lookup == null)
             {
-                locationError = "ZIP code not found";
+                locationError = $"ZIP {input} was not found by the geocoding endpoint.";
+                manualLocationStatus = $"ZIP {input} returned no result.";
                 return;
             }
 
             LocationService.SetManualLocation(lookup.Latitude, lookup.Longitude, lookup.FormattedAddress);
             showLocationPopup = false;
             userAddress = lookup.FormattedAddress;
+            manualLocationStatus = $"ZIP {input} resolved to {lookup.FormattedAddress}.";
 
             Logger.LogInformation("Home manual location set: ZIP={Zip}, lat={Lat}, lng={Lng}, label={Label}",
                 input, activeLat, activeLng, lookup.FormattedAddress ?? "");
+
+            if (selectedTag != null)
+            {
+                ResetTagCache("manual_zip_applied");
+                await EnsureTagLoadedAsync(selectedTag, "manual_zip_applied");
+            }
         }
         catch (Exception ex)
         {
-            locationError = "Location lookup failed";
+            locationError = ex.Message;
+            manualLocationStatus = $"ZIP {input} lookup failed.";
             Logger.LogError(ex, "Home page location lookup failed for {Input}", input);
+        }
+        finally
+        {
+            isApplyingManualLocation = false;
+            StateHasChanged();
         }
     }
 
@@ -894,6 +963,29 @@
     {
         LocationService.ClearManualLocation();
         showLocationPopup = false;
+        await LocationService.EnableTrackingAsync();
+    }
+
+    private void UpdateFilteredEmptyState(TagLoadDiagnostic diagnostic)
+    {
+        filteredEmptyTitle = $"No {diagnostic.TagName} cards loaded.";
+        filteredEmptyDetail = diagnostic.HasActiveLocation
+            ? $"The app asked for {diagnostic.TagName} near {activeLat:0.0000}, {activeLng:0.0000}, but nothing survived the fetch/filter pipeline."
+            : $"The app tried to build {diagnostic.TagName} cards without an active location and got no matching rows.";
+
+        filteredPossibleReasons =
+        [
+            !hasActiveLocation ? "No active location was available when the category request ran." : "The active location may be valid, but the selected category fetch returned zero usable matches.",
+            !string.IsNullOrWhiteSpace(LocationService.LastError) ? $"Current location had an error: {LocationService.LastError}" : "Location permission/state may have changed while the request was running.",
+            diagnostic.BroadDiscoverCount == 0 ? "The broad nearby discover call returned zero cards." : $"The broad discover call returned {diagnostic.BroadDiscoverCount} cards, but none matched this category.",
+            diagnostic.BroadTagMatchCount == 0 ? "The backend returned cards, but none were tagged into this category." : $"The first pass found {diagnostic.BroadTagMatchCount} cards for this category.",
+            diagnostic.LocalRetryCount == 0 ? "A retry against the locally cached activity list also found zero matching cards." : $"The local retry found {diagnostic.LocalRetryCount} matching cards.",
+            diagnostic.TargetedDiscoverCount == 0 ? "The targeted category discover call returned zero cards." : $"The targeted discover call returned {diagnostic.TargetedDiscoverCount} cards.",
+            diagnostic.TargetedTagMatchCount == 0 ? "The targeted results still did not map back to this category on the client." : $"The targeted results produced {diagnostic.TargetedTagMatchCount} client-side matches.",
+            "The radius may be too small for this category at the selected location.",
+            "The backend Google-type to app-category mapping may be incomplete for the returned places.",
+            "The API discover endpoint or DB fallback may be returning rows without the expected category tags."
+        ];
     }
 
     public void Dispose()
@@ -903,4 +995,16 @@
     }
 
     private record TagCardInfo(string Name, string Emoji);
+
+    private sealed class TagLoadDiagnostic
+    {
+        public string TagName { get; set; } = "";
+        public string Trigger { get; set; } = "";
+        public bool HasActiveLocation { get; set; }
+        public int BroadDiscoverCount { get; set; }
+        public int BroadTagMatchCount { get; set; }
+        public int LocalRetryCount { get; set; }
+        public int TargetedDiscoverCount { get; set; }
+        public int TargetedTagMatchCount { get; set; }
+    }
 }

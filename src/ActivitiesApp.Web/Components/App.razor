@@ -22,18 +22,57 @@
     <script src="@Assets["_framework/blazor.server.js"]"></script>
 
     <script>
-        window.getUserLocation = () => {
-            return new Promise((resolve, reject) => {
+        window.activitiesLocation = {
+            getCurrentLocation: async () => {
+                const readPermissionState = async () => {
+                    if (!navigator.permissions || !navigator.permissions.query) {
+                        return null;
+                    }
+
+                    try {
+                        const permission = await navigator.permissions.query({ name: 'geolocation' });
+                        return permission.state || null;
+                    } catch {
+                        return null;
+                    }
+                };
+
+                const permissionState = await readPermissionState();
                 if (!navigator.geolocation) {
-                    reject('Geolocation not supported');
-                    return;
+                    return {
+                        success: false,
+                        errorCode: 'geolocation_unsupported',
+                        message: 'This browser does not support geolocation.',
+                        permissionState,
+                        diagnostics: 'navigator.geolocation is unavailable'
+                    };
                 }
-                navigator.geolocation.getCurrentPosition(
-                    pos => resolve([pos.coords.latitude, pos.coords.longitude]),
-                    err => reject(err.message),
-                    { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
-                );
-            });
+
+                return new Promise(resolve => {
+                    navigator.geolocation.getCurrentPosition(
+                        pos => resolve({
+                            success: true,
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude,
+                            permissionState: permissionState || 'granted'
+                        }),
+                        async err => resolve({
+                            success: false,
+                            errorCode: err.code === 1
+                                ? 'permission_denied'
+                                : err.code === 2
+                                    ? 'position_unavailable'
+                                    : err.code === 3
+                                        ? 'timeout'
+                                        : 'browser_location_failed',
+                            message: err.message || 'Unable to get your current location.',
+                            permissionState: await readPermissionState(),
+                            diagnostics: `code=${err.code}; maximumAge=300000; timeout=8000`
+                        }),
+                        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+                    );
+                });
+            }
         };
 
         window.addRecentlyViewed = (id) => {

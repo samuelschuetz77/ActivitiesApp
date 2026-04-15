@@ -117,19 +117,19 @@ internal sealed class FakeSyncClient : IActivitySyncClient
 
 internal sealed class SequenceLocationProvider : ILocationProvider
 {
-    private readonly Queue<Func<Task<(double Latitude, double Longitude)>>> _responses = new();
+    private readonly Queue<Func<Task<LocationFetchResult>>> _responses = new();
 
     public void Enqueue(double latitude, double longitude)
     {
-        _responses.Enqueue(() => Task.FromResult((latitude, longitude)));
+        _responses.Enqueue(() => Task.FromResult(LocationFetchResult.Success(latitude, longitude, "test")));
     }
 
     public void EnqueueError(string message)
     {
-        _responses.Enqueue(() => Task.FromException<(double Latitude, double Longitude)>(new InvalidOperationException(message)));
+        _responses.Enqueue(() => Task.FromResult(LocationFetchResult.Failure("test_error", message, "test")));
     }
 
-    public Task<(double Latitude, double Longitude)> GetLocationAsync()
+    public Task<LocationFetchResult> GetLocationAsync(CancellationToken cancellationToken = default)
     {
         if (_responses.Count == 0)
         {

@@ -144,6 +144,51 @@ public class OfflineActivityService : IActivityService
         return cached;
     }
 
+    public async Task<List<Activity>> SearchActivitiesAsync(double lat, double lng, int radiusMeters, string searchTerm)
+    {
+        var radiusMiles = radiusMeters / 1609.34;
+        var term = searchTerm.Trim();
+
+        var cached = NormalizeActivities(_cache.GetAll())
+            .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
+            .Where(a =>
+                (a.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.City?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Category?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+        if (_networkStatus.HasInternet)
+        {
+            try
+            {
+                var activities = await _http.GetFromJsonAsync<List<Activity>>(
+                    $"/api/discover?lat={lat}&lng={lng}&radiusMeters={radiusMeters}&searchTerm={Uri.EscapeDataString(term)}");
+
+                if (activities != null && activities.Count > 0)
+                {
+                    await _store.SaveActivitiesAsync(
+                        activities.Select(activity => ActivityMapping.ToLocalActivity(activity, SyncState.Synced)),
+                        CancellationToken.None);
+
+                    foreach (var refreshedActivity in activities)
+                    {
+                        _cache.AddOrUpdate(NormalizeActivity(refreshedActivity)!, suppressNotify: true);
+                    }
+
+                    DataChanged?.Invoke();
+                    return NormalizeActivities(activities);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SearchActivitiesAsync remote refresh failed for term {Term}", term);
+            }
+        }
+
+        return cached;
+    }
+
     public async Task<List<NearbyPlace>> SearchNearbyPlacesAsync(double lat, double lng, int radiusMeters, string? type = null, string? keyword = null)
     {
         if (!_networkStatus.HasInternet)
@@ -197,12 +242,24 @@ public class OfflineActivityService : IActivityService
     {
         if (!_networkStatus.HasInternet)
         {
-            return null;
+            throw new InvalidOperationException("ZIP lookup is unavailable while the device is offline.");
         }
 
         try
         {
-            var result = await _http.GetFromJsonAsync<ZipLookupResult>($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            using var response = await _http.GetAsync($"/api/geocode/zip/{Uri.EscapeDataString(zipCode)}");
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"ZIP lookup failed with HTTP {(int)response.StatusCode}: {body}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<ZipLookupResult>();
             if (result != null)
             {
                 result.PostalCode = zipCode;
@@ -210,9 +267,13 @@ public class OfflineActivityService : IActivityService
 
             return result;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        catch (TaskCanceledException ex)
         {
-            return null;
+            throw new InvalidOperationException("ZIP lookup timed out while contacting the API.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"ZIP lookup network error: {ex.Message}", ex);
         }
     }
 
