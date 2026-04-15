@@ -339,18 +339,25 @@
             var locationSw = System.Diagnostics.Stopwatch.StartNew();
             LocationService.StartTracking();
 
-            // If location is already known (back-navigation, LocationService is scoped/singleton),
-            // skip the 2s wait. Only wait on a true cold start.
+            // Wait up to 2s for location on cold start, but don't block
+            // loading activities — load them in parallel
             if (!hasActiveLocation)
             {
                 var locationReady = new TaskCompletionSource<bool>();
-                void onFirstLocation()
-                {
-                    locationReady.TrySetResult(true);
-                }
+                void onFirstLocation() { locationReady.TrySetResult(true); }
                 LocationService.LocationChanged += onFirstLocation;
+
+                // Load activities + wait for location in parallel
+                var loadTask = Task.Run(async () =>
+                {
+                    await LoadRecentlyViewed();
+                    try { allActivities = await ActivityService.ListActivitiesAsync(); }
+                    catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
+                });
+
                 var winner = await Task.WhenAny(locationReady.Task, Task.Delay(2000));
                 LocationService.LocationChanged -= onFirstLocation;
+                await loadTask; // Ensure activities finished loading
 
                 Logger.LogInformation(
                     "Home startup: cold start, location resolved={Resolved} in {Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
@@ -361,11 +368,11 @@
                 Logger.LogInformation(
                     "Home startup: location already known, skipping wait, lat={Lat}, lng={Lng}, elapsed={Ms}ms",
                     activeLat, activeLng, locationSw.ElapsedMilliseconds);
+                await LoadRecentlyViewed();
+                try { allActivities = await ActivityService.ListActivitiesAsync(); }
+                catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
             }
 
-            await LoadRecentlyViewed();
-            try { allActivities = await ActivityService.ListActivitiesAsync(); }
-            catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
             ResetTagCache("startup");
             startupComplete = true;
             Logger.LogInformation("Home startup complete: cachedTags={CachedCount}, hasLocation={HasLocation}, hasActiveLocation={HasActive}, recentlyViewedCount={RecentCount}",
@@ -479,13 +486,40 @@
         }
     }
 
+    private CancellationTokenSource? _searchCts;
+
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchText = e.Value?.ToString() ?? "";
-        selectedTag = string.IsNullOrWhiteSpace(searchText) ? selectedTag : null;
-        filteredActivities = string.IsNullOrWhiteSpace(searchText) ? filteredActivities : null;
-        searchResults = string.IsNullOrWhiteSpace(searchText) ? null : FuzzySearchService.Search(allActivities ?? [], searchText);
-        StateHasChanged();
+
+        // Clear search results immediately when input emptied (no delay needed)
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            searchResults = null;
+            StateHasChanged();
+            return;
+        }
+
+        // Clear tag selection immediately so UI responds
+        selectedTag = null;
+        filteredActivities = null;
+
+        // Debounce fuzzy search — 200ms after last keystroke
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+        var capturedText = searchText;
+        _ = Task.Delay(200, token).ContinueWith(_ =>
+        {
+            if (!token.IsCancellationRequested)
+            {
+                InvokeAsync(() =>
+                {
+                    searchResults = FuzzySearchService.Search(allActivities ?? [], capturedText);
+                    StateHasChanged();
+                });
+            }
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
     }
 
     private IEnumerable<Activity> GetFilteredRecent() =>
