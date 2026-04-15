@@ -174,8 +174,6 @@ jobs:
 
       - name: Rolling deploy with smoke test
         run: |
-          kubectl port-forward svc/activitiesapp-api 18080:8080 --namespace=activitiesapp &
-          PF_API_PID=$!
           kubectl port-forward svc/prometheus 19090:9090 --namespace=activitiesapp &
           PF_PROM_PID=$!
           sleep 3
@@ -184,7 +182,6 @@ jobs:
           k6 run \
             --out experimental-prometheus-rw \
             --env WEB_URL=https://activor.duckdns.org \
-            --env API_URL=http://localhost:18080 \
             deploy/k6/smoke-test.js &
           K6_PID=$!
           sleep 10
@@ -205,7 +202,7 @@ jobs:
           wait $K6_PID
           K6_EXIT=$?
 
-          kill $PF_API_PID $PF_PROM_PID || true
+          kill $PF_PROM_PID || true
 
           exit $K6_EXIT
 
