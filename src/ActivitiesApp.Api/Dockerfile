@@ -7,6 +7,7 @@ WORKDIR /src
 
 # Copy csproj files and restore
 COPY src/ActivitiesApp.Api/ActivitiesApp.Api.csproj src/ActivitiesApp.Api/
+COPY src/ActivitiesApp.Core/ActivitiesApp.Core.csproj src/ActivitiesApp.Core/
 COPY src/ActivitiesApp.Infrastructure/ActivitiesApp.Infrastructure.csproj src/ActivitiesApp.Infrastructure/
 COPY src/ActivitiesApp.Infrastructure.Migrations/ActivitiesApp.Infrastructure.Migrations.csproj src/ActivitiesApp.Infrastructure.Migrations/
 COPY src/ActivitiesApp.ServiceDefaults/ActivitiesApp.ServiceDefaults.csproj src/ActivitiesApp.ServiceDefaults/
@@ -14,6 +15,7 @@ RUN dotnet restore src/ActivitiesApp.Api/ActivitiesApp.Api.csproj
 
 # Copy everything and build
 COPY src/ActivitiesApp.Api/ src/ActivitiesApp.Api/
+COPY src/ActivitiesApp.Core/ src/ActivitiesApp.Core/
 COPY src/ActivitiesApp.Infrastructure/ src/ActivitiesApp.Infrastructure/
 COPY src/ActivitiesApp.Infrastructure.Migrations/ src/ActivitiesApp.Infrastructure.Migrations/
 COPY src/ActivitiesApp.ServiceDefaults/ src/ActivitiesApp.ServiceDefaults/
