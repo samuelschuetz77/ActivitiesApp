@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using ActivitiesApp.Infrastructure.Data;
 using ActivitiesApp.Infrastructure.Models;
 using ActivitiesApp.Protos;
+using ActivitiesApp.Shared.Models;
+using Activity = ActivitiesApp.Infrastructure.Models.Activity;
 
 namespace ActivitiesApp.Api.Services;
 
@@ -97,7 +99,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         _logger.LogInformation("DiscoverActivities at ({Lat},{Lng}) radius={Radius}m tag={Tag}",
             request.Latitude, request.Longitude, request.RadiusMeters, request.TagName ?? "");
 
-        List<GooglePlacesService.NearbyPlace> places;
+        List<NearbyPlace> places;
         try
         {
             // Single broad search to minimize API calls
@@ -492,7 +494,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
 
     // ─── Helpers ───
 
-    private static ActivityResponse ToActivityResponse(Activity activity)
+    private static ActivityResponse ToActivityResponse(ActivitiesApp.Infrastructure.Models.Activity activity)
     {
         return new ActivityResponse
         {
@@ -513,7 +515,7 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         };
     }
 
-    private static ActivitySyncItem ToSyncItem(Activity activity)
+    private static ActivitySyncItem ToSyncItem(ActivitiesApp.Infrastructure.Models.Activity activity)
     {
         return new ActivitySyncItem
         {
@@ -537,9 +539,9 @@ public class ActivityGrpcService : ActivityService.ActivityServiceBase
         };
     }
 
-    private static Activity FromSyncItem(ActivitySyncItem item)
+    private static ActivitiesApp.Infrastructure.Models.Activity FromSyncItem(ActivitySyncItem item)
     {
-        return new Activity
+        return new ActivitiesApp.Infrastructure.Models.Activity
         {
             Id = Guid.TryParse(item.Id, out var id) ? id : Guid.NewGuid(),
             Name = item.Name,
