@@ -339,18 +339,25 @@
             var locationSw = System.Diagnostics.Stopwatch.StartNew();
             LocationService.StartTracking();
 
-            // If location is already known (back-navigation, LocationService is scoped/singleton),
-            // skip the 2s wait. Only wait on a true cold start.
+            // Wait up to 2s for location on cold start, but don't block
+            // loading activities — load them in parallel
             if (!hasActiveLocation)
             {
                 var locationReady = new TaskCompletionSource<bool>();
-                void onFirstLocation()
-                {
-                    locationReady.TrySetResult(true);
-                }
+                void onFirstLocation() { locationReady.TrySetResult(true); }
                 LocationService.LocationChanged += onFirstLocation;
+
+                // Load activities + wait for location in parallel
+                var loadTask = Task.Run(async () =>
+                {
+                    await LoadRecentlyViewed();
+                    try { allActivities = await ActivityService.ListActivitiesAsync(); }
+                    catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
+                });
+
                 var winner = await Task.WhenAny(locationReady.Task, Task.Delay(2000));
                 LocationService.LocationChanged -= onFirstLocation;
+                await loadTask; // Ensure activities finished loading
 
                 Logger.LogInformation(
                     "Home startup: cold start, location resolved={Resolved} in {Ms}ms, hasActiveLocation={HasActive}, lat={Lat}, lng={Lng}",
@@ -361,11 +368,11 @@
                 Logger.LogInformation(
                     "Home startup: location already known, skipping wait, lat={Lat}, lng={Lng}, elapsed={Ms}ms",
                     activeLat, activeLng, locationSw.ElapsedMilliseconds);
+                await LoadRecentlyViewed();
+                try { allActivities = await ActivityService.ListActivitiesAsync(); }
+                catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
             }
 
-            await LoadRecentlyViewed();
-            try { allActivities = await ActivityService.ListActivitiesAsync(); }
-            catch (Exception ex) { Logger.LogWarning(ex, "Failed to load all activities for search"); }
             ResetTagCache("startup");
             startupComplete = true;
             Logger.LogInformation("Home startup complete: cachedTags={CachedCount}, hasLocation={HasLocation}, hasActiveLocation={HasActive}, recentlyViewedCount={RecentCount}",

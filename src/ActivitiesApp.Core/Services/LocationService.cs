@@ -6,7 +6,9 @@ public class LocationService : IDisposable
 {
     private readonly ILogger<LocationService> _logger;
     private readonly ILocationProvider _locationProvider;
+    private readonly SynchronizationContext? _syncContext;
     private Timer? _timer;
+    private bool _tracking;
 
     public double Latitude { get; private set; }
     public double Longitude { get; private set; }
@@ -26,18 +28,39 @@ public class LocationService : IDisposable
     {
         _logger = logger;
         _locationProvider = locationProvider;
+        // Capture the sync context at construction time (Blazor circuit context)
+        _syncContext = SynchronizationContext.Current;
     }
 
     public void StartTracking()
     {
-        if (_timer != null)
+        if (_tracking)
         {
             return;
         }
+        _tracking = true;
 
         _logger.LogInformation("Starting location tracking");
         _ = UpdateLocationAsync();
-        _timer = new Timer(async _ => await UpdateLocationAsync(), null, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3));
+
+        // Timer callback must marshal back to the sync context for JS interop safety.
+        // In Blazor Server, JS interop can only run on the circuit's sync context.
+        _timer = new Timer(_ =>
+        {
+            if (_syncContext != null)
+            {
+                _syncContext.Post(async _ =>
+                {
+                    try { await UpdateLocationAsync(); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Timer location update failed"); }
+                }, null);
+            }
+            else
+            {
+                // Non-Blazor (MAUI etc) — safe to call directly
+                _ = UpdateLocationAsync();
+            }
+        }, null, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3));
     }
 
     public Task RefreshAsync() => UpdateLocationAsync();
@@ -66,16 +89,12 @@ public class LocationService : IDisposable
         }
         catch (Exception ex)
         {
-            var wasLocated = HasLocation;
-            Latitude = 0;
-            Longitude = 0;
-            HasLocation = false;
-            LastError = ex.Message;
-            _logger.LogWarning(ex, "Location failed: wasLocated={WasLocated}, firingChanged={Firing}", wasLocated, wasLocated);
-            if (wasLocated)
+            // Don't wipe existing good location on transient failures
+            if (!HasLocation)
             {
-                LocationChanged?.Invoke();
+                LastError = ex.Message;
             }
+            _logger.LogWarning(ex, "Location update failed: hasLocation={HasLocation}", HasLocation);
         }
     }
 
