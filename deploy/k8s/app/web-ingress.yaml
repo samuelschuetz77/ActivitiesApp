@@ -16,7 +16,7 @@ spec:
   tls:
     - hosts:
         - activor.duckdns.org
-      secretName: wildcard-activor-tls
+      secretName: apex-activor-tls
   rules:
     - host: activor.duckdns.org
       http:
