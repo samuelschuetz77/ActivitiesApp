@@ -11,6 +11,8 @@ using System.Text.Json;
 using System.Security.Claims;
 using ActivitiesApp.Api.Endpoints;
 
+// New comment to test 0 time deploy
+
 var builder = WebApplication.CreateBuilder(args);
 var appMeter = new Meter(builder.Environment.ApplicationName);
 var activitiesCreatedCounter = appMeter.CreateCounter<long>(
