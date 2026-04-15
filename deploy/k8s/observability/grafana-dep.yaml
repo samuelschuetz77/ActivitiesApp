@@ -57,6 +57,9 @@ spec:
             - name: grafana-dashboard
               mountPath: /var/lib/grafana/dashboards/activitiesapp-observability-dashboard.json
               subPath: activitiesapp-observability-dashboard.json
+            - name: grafana-k6-dashboard
+              mountPath: /var/lib/grafana/dashboards/k6-zdd-dashboard.json
+              subPath: k6-zdd-dashboard.json
       volumes:
         - name: grafana-datasources
           configMap:
@@ -67,3 +70,6 @@ spec:
         - name: grafana-dashboard
           configMap:
             name: grafana-dashboard
+        - name: grafana-k6-dashboard
+          configMap:
+            name: grafana-k6-dashboard

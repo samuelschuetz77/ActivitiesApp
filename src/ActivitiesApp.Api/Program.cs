@@ -2,6 +2,7 @@ using ActivitiesApp.Infrastructure.Data;
 using ActivitiesApp.Infrastructure.Models;
 using ActivitiesApp.Infrastructure.Services;
 using ActivitiesApp.Api.Services;
+using ActivitiesApp.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Identity.Web;
@@ -276,11 +277,11 @@ app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, st
     var gridLng = Math.Round(lng, 2);
     var discoverCacheKey = $"discover:{gridLat}:{gridLng}:{radius}";
 
-    List<GooglePlacesService.NearbyPlace> googlePlaces;
+    List<NearbyPlace> googlePlaces;
     try
     {
         // Check server-side cache first
-        if (discoverCache.TryGetValue(discoverCacheKey, out List<GooglePlacesService.NearbyPlace>? cachedPlaces) && cachedPlaces != null)
+        if (discoverCache.TryGetValue(discoverCacheKey, out List<NearbyPlace>? cachedPlaces) && cachedPlaces != null)
         {
             googlePlaces = cachedPlaces;
             log.LogInformation("REST Discover {RequestId} cache HIT: {Count} places from grid ({GridLat},{GridLng})",
@@ -427,10 +428,17 @@ app.MapGet("/api/places/nearby", async (double lat, double lng, int? radiusMeter
     return Results.Ok(results);
 });
 
-app.MapGet("/api/places/{placeId}", async (string placeId, GooglePlacesService places) =>
+app.MapGet("/api/places/{placeId}", async (string placeId, GooglePlacesService places, IMemoryCache cache) =>
 {
+    var cacheKey = $"placedetails:{placeId}";
+    if (cache.TryGetValue(cacheKey, out var cached))
+        return Results.Ok(cached);
+
     var details = await places.GetPlaceDetailsAsync(placeId);
-    return details is null ? Results.NotFound() : Results.Ok(details);
+    if (details is null) return Results.NotFound();
+
+    cache.Set(cacheKey, details, TimeSpan.FromHours(1));
+    return Results.Ok(details);
 });
 
 app.MapGet("/api/geocode/reverse", async (double lat, double lng, GooglePlacesService places) =>
@@ -547,7 +555,7 @@ void FixImageUrl(ActivitiesApp.Infrastructure.Models.Activity activity)
 
 static bool ApplyGooglePlaceData(
     ActivitiesApp.Infrastructure.Models.Activity activity,
-    GooglePlacesService.NearbyPlace place,
+    NearbyPlace place,
     string category)
 {
     var desiredImageUrl = GetPreferredPlaceImageUrl(place);
@@ -586,7 +594,7 @@ static bool ApplyGooglePlaceData(
     return changed;
 }
 
-static string GetPreferredPlaceImageUrl(GooglePlacesService.NearbyPlace place)
+static string GetPreferredPlaceImageUrl(NearbyPlace place)
 {
     // Only use the fast photo reference URL — never fall back to /api/photos/place/
     // which calls Place Details ($0.017 per call)

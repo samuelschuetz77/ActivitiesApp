@@ -1,6 +1,6 @@
 using ActivitiesApp.Shared.Models;
 
-namespace ActivitiesApp.Shared.Services;
+namespace ActivitiesApp.Core.Search;
 
 public record ScoredActivity(Activity Activity, double Score);
 
@@ -219,7 +219,6 @@ public static class FuzzySearchService
         if (queryTokens.Length == 0)
             return [];
 
-        // Resolve which categories the query maps to via synonyms
         var synonymCategories = GetSynonymCategories(normalizedQuery, queryTokens);
 
         var results = new List<ScoredActivity>();
@@ -236,11 +235,19 @@ public static class FuzzySearchService
         return results.OrderByDescending(r => r.Score).ToList();
     }
 
+    /// <summary>
+    /// Returns fuzzy-matched activities if searchText is non-empty, otherwise returns all activities unchanged.
+    /// </summary>
+    public static IEnumerable<Activity> SearchOrAll(IEnumerable<Activity> activities, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText)) return activities;
+        return Search(activities, searchText).Select(s => s.Activity);
+    }
+
     private static double ScoreActivity(Activity activity, string[] queryTokens, HashSet<string> synonymCategories)
     {
         double totalScore = 0;
 
-        // Tokenize each field for matching
         var nameTokens = Tokenize(activity.Name);
         var categoryTokens = Tokenize(activity.Category);
         var cityTokens = Tokenize(activity.City);
@@ -248,7 +255,6 @@ public static class FuzzySearchService
 
         foreach (var qt in queryTokens)
         {
-            // Best match per field
             var nameScore = BestTokenScore(qt, nameTokens);
             var categoryScore = BestTokenScore(qt, categoryTokens);
             var cityScore = BestTokenScore(qt, cityTokens);
@@ -260,7 +266,6 @@ public static class FuzzySearchService
             totalScore += descScore * DescriptionWeight;
         }
 
-        // Keyword bonus: match query tokens against implied keywords for the activity's categories
         if (!string.IsNullOrWhiteSpace(activity.Category))
         {
             var activityTags = activity.Category
@@ -280,7 +285,6 @@ public static class FuzzySearchService
                 totalScore += bestKeywordScore * KeywordWeight;
             }
 
-            // Synonym bonus: if the query maps to categories that this activity belongs to
             if (synonymCategories.Count > 0)
             {
                 foreach (var tag in activityTags)
@@ -294,13 +298,9 @@ public static class FuzzySearchService
             }
         }
 
-        // Normalize by token count so single-word and multi-word queries are comparable
         return totalScore / queryTokens.Length;
     }
 
-    /// <summary>
-    /// Finds the best fuzzy match score for a query token against a set of target tokens.
-    /// </summary>
     private static double BestTokenScore(string queryToken, string[] targetTokens)
     {
         double best = 0;
@@ -308,36 +308,23 @@ public static class FuzzySearchService
         {
             var score = FuzzyTokenScore(queryToken, tt);
             if (score > best) best = score;
-            if (best >= 1.0) break; // Can't do better than exact match
+            if (best >= 1.0) break;
         }
         return best;
     }
 
-    /// <summary>
-    /// Computes a 0.0-1.0 similarity score between a query token and a target token.
-    /// </summary>
     private static double FuzzyTokenScore(string queryToken, string targetToken)
     {
-        // Exact match
         if (string.Equals(queryToken, targetToken, StringComparison.OrdinalIgnoreCase))
             return 1.0;
 
         var qtLower = queryToken.ToLowerInvariant();
         var ttLower = targetToken.ToLowerInvariant();
 
-        // Prefix match (query is prefix of target)
-        if (ttLower.StartsWith(qtLower))
-            return 0.9;
+        if (ttLower.StartsWith(qtLower)) return 0.9;
+        if (ttLower.Contains(qtLower)) return 0.8;
+        if (qtLower.Contains(ttLower) && ttLower.Length >= 3) return 0.75;
 
-        // Substring match
-        if (ttLower.Contains(qtLower))
-            return 0.8;
-
-        // Reverse containment (target is contained in query, e.g. query "restaurants" target "restaurant")
-        if (qtLower.Contains(ttLower) && ttLower.Length >= 3)
-            return 0.75;
-
-        // Levenshtein-based fuzzy match
         var distance = LevenshteinDistance(qtLower, ttLower);
         var maxLen = Math.Max(qtLower.Length, ttLower.Length);
         if (maxLen == 0) return 0;
@@ -346,49 +333,33 @@ public static class FuzzySearchService
         return similarity >= FuzzyThreshold ? similarity * 0.7 : 0;
     }
 
-    /// <summary>
-    /// Resolves which categories the full query and its tokens map to via the synonym dictionary.
-    /// Checks both the full query string and individual tokens.
-    /// </summary>
     private static HashSet<string> GetSynonymCategories(string fullQuery, string[] tokens)
     {
         var categories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Check full query first (handles multi-word synonyms like "theme park")
         if (SynonymMap.TryGetValue(fullQuery, out var fullMatch))
-        {
             foreach (var cat in fullMatch) categories.Add(cat);
-        }
 
-        // Check individual tokens
         foreach (var token in tokens)
         {
             if (SynonymMap.TryGetValue(token, out var tokenMatch))
-            {
                 foreach (var cat in tokenMatch) categories.Add(cat);
-            }
 
-            // Also check fuzzy synonym matches for misspellings of synonyms
             foreach (var kvp in SynonymMap)
             {
                 var synonymKey = kvp.Key;
-                if (synonymKey.Contains(' ')) continue; // Skip multi-word for per-token fuzzy
+                if (synonymKey.Contains(' ')) continue;
 
                 var distance = LevenshteinDistance(token.ToLowerInvariant(), synonymKey.ToLowerInvariant());
                 var maxLen = Math.Max(token.Length, synonymKey.Length);
                 if (maxLen > 0 && distance <= 2 && (1.0 - (double)distance / maxLen) >= FuzzyThreshold)
-                {
                     foreach (var cat in kvp.Value) categories.Add(cat);
-                }
             }
         }
 
         return categories;
     }
 
-    /// <summary>
-    /// Splits a string into lowercase tokens for matching.
-    /// </summary>
     private static string[] Tokenize(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return [];
@@ -396,40 +367,28 @@ public static class FuzzySearchService
             .Split([' ', ',', '&', '-', '/', '(', ')'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    /// <summary>
-    /// Computes the Levenshtein edit distance between two strings.
-    /// Uses the two-row optimization for O(min(m,n)) space.
-    /// </summary>
     private static int LevenshteinDistance(string a, string b)
     {
         if (string.IsNullOrEmpty(a)) return b?.Length ?? 0;
         if (string.IsNullOrEmpty(b)) return a.Length;
 
-        // Ensure a is the shorter string for space optimization
-        if (a.Length > b.Length)
-            (a, b) = (b, a);
+        if (a.Length > b.Length) (a, b) = (b, a);
 
         var aLen = a.Length;
         var bLen = b.Length;
-
         var prevRow = new int[aLen + 1];
         var currRow = new int[aLen + 1];
 
-        for (var i = 0; i <= aLen; i++)
-            prevRow[i] = i;
+        for (var i = 0; i <= aLen; i++) prevRow[i] = i;
 
         for (var j = 1; j <= bLen; j++)
         {
             currRow[0] = j;
-
             for (var i = 1; i <= aLen; i++)
             {
                 var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                currRow[i] = Math.Min(
-                    Math.Min(currRow[i - 1] + 1, prevRow[i] + 1),
-                    prevRow[i - 1] + cost);
+                currRow[i] = Math.Min(Math.Min(currRow[i - 1] + 1, prevRow[i] + 1), prevRow[i - 1] + cost);
             }
-
             (prevRow, currRow) = (currRow, prevRow);
         }
 
