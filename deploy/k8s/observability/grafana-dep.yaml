@@ -60,6 +60,9 @@ spec:
             - name: grafana-k6-dashboard
               mountPath: /var/lib/grafana/dashboards/k6-zdd-dashboard.json
               subPath: k6-zdd-dashboard.json
+            - name: grafana-k6-errors-dashboard
+              mountPath: /var/lib/grafana/dashboards/k6-errors-dashboard.json
+              subPath: k6-errors-dashboard.json
       volumes:
         - name: grafana-datasources
           configMap:
@@ -73,3 +76,6 @@ spec:
         - name: grafana-k6-dashboard
           configMap:
             name: grafana-k6-dashboard
+        - name: grafana-k6-errors-dashboard
+          configMap:
+            name: grafana-k6-errors-dashboard
