@@ -196,8 +196,10 @@ jobs:
           kubectl set env deployment/activitiesapp-web APP_VERSION=${{ env.SHA_TAG }} --namespace=activitiesapp
 
           kubectl rollout status deployment/activitiesapp-api --namespace=activitiesapp --timeout=120s &
+          ROLLOUT_API_PID=$!
           kubectl rollout status deployment/activitiesapp-web --namespace=activitiesapp --timeout=120s &
-          wait
+          ROLLOUT_WEB_PID=$!
+          wait $ROLLOUT_API_PID $ROLLOUT_WEB_PID
 
           wait $K6_PID
           K6_EXIT=$?
