@@ -635,7 +635,7 @@ h1:focus {
 
 .back-button {
     position: sticky;
-    top: 0.75rem;
+    top: max(1rem, env(safe-area-inset-top));
     z-index: 50;
     display: inline-block;
     background: #fff;
