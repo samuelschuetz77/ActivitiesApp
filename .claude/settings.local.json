@@ -61,7 +61,8 @@
       "Bash(az group list:*)",
       "Bash(az webapp list:*)",
       "Bash(az webapp:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(wsl which *)"
     ]
   }
 }
