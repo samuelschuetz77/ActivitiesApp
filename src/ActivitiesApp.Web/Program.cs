@@ -7,8 +7,6 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 
-// Testing 0 down
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
