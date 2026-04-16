@@ -53,6 +53,7 @@
 
 .app-shell.native .app-content {
     padding: 1rem;
+    padding-top: calc(1rem + env(safe-area-inset-top));
 }
 
 @media (max-width: 640.98px) {
