@@ -54,15 +54,8 @@ spec:
             - name: grafana-dashboard-provider
               mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
               subPath: dashboards.yaml
-            - name: grafana-dashboard
-              mountPath: /var/lib/grafana/dashboards/activitiesapp-observability-dashboard.json
-              subPath: activitiesapp-observability-dashboard.json
-            - name: grafana-k6-dashboard
-              mountPath: /var/lib/grafana/dashboards/k6-zdd-dashboard.json
-              subPath: k6-zdd-dashboard.json
-            - name: grafana-k6-errors-dashboard
-              mountPath: /var/lib/grafana/dashboards/k6-errors-dashboard.json
-              subPath: k6-errors-dashboard.json
+            - name: grafana-dashboards
+              mountPath: /var/lib/grafana/dashboards
       volumes:
         - name: grafana-datasources
           configMap:
@@ -70,12 +63,6 @@ spec:
         - name: grafana-dashboard-provider
           configMap:
             name: grafana-dashboard-provider
-        - name: grafana-dashboard
+        - name: grafana-dashboards
           configMap:
-            name: grafana-dashboard
-        - name: grafana-k6-dashboard
-          configMap:
-            name: grafana-k6-dashboard
-        - name: grafana-k6-errors-dashboard
-          configMap:
-            name: grafana-k6-errors-dashboard
+            name: grafana-dashboards

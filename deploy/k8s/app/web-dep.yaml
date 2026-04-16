@@ -43,7 +43,7 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: AZURE_CLIENT_SECRET
-            - name: APP_VERSION
+            - name: APP_VERSION 
               value: "dev"
             - name: OTEL_SERVICE_NAME
               value: activitiesapp-web
@@ -74,10 +74,8 @@ spec:
             httpGet:
               path: /health
               port: 8080
-            initialDelaySeconds: 0
             periodSeconds: 10
             failureThreshold: 3
-            successThreshold: 1
           livenessProbe:
             httpGet:
               path: /alive
