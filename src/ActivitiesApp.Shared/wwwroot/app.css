@@ -635,34 +635,26 @@ h1:focus {
 
 .back-button {
     position: sticky;
-    top: 0;
+    top: 0.75rem;
     z-index: 50;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: none;
-    border-bottom: 1px solid #e8eaed;
-    border-radius: 0;
-    padding: 0.6rem 2rem;
-    margin: -1.5rem -2rem 1rem -2rem;
-    width: calc(100% + 4rem);
-    font-size: 0.9rem;
+    display: inline-block;
+    background: #fff;
+    border: 2px solid #e3ebf5;
+    border-radius: 12px;
+    padding: 0.55rem 1.6rem;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
     cursor: pointer;
-    color: #555;
-    text-align: left;
-    transition: color 0.2s;
+    color: #1b6ec2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
 
 .back-button:hover {
-    color: #1b6ec2;
-}
-
-@media (max-width: 640.98px) {
-    .back-button {
-        padding: 0.6rem 1rem;
-        margin: -1rem -1rem 1rem -1rem;
-        width: calc(100% + 2rem);
-    }
+    background: #f3f7fb;
+    border-color: #1b6ec2;
+    box-shadow: 0 4px 12px rgba(27, 110, 194, 0.15);
 }
 
 .detail-card {
