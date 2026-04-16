@@ -353,6 +353,256 @@ data:
           ],
           "title": "Google API Request Trend",
           "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 },
+          "id": 100,
+          "title": "k6",
+          "type": "row"
+        },
+        {
+          "id": 101,
+          "title": "Requests per Second",
+          "description": "Should stay at ~100 RPS throughout the rollout. Any drop indicates a routing gap.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 45, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(k6_http_reqs_total[15s]))",
+              "legendFormat": "RPS"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 80 },
+                  { "color": "green", "value": 95 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 102,
+          "title": "Error Rate",
+          "description": "Percentage of requests returning 5xx. Should be 0% throughout — any blip is a downtime event.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 45, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(k6_http_req_failed_total[15s])) / sum(rate(k6_http_reqs_total[15s])) * 100",
+              "legendFormat": "Error %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 0.1 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 103,
+          "title": "Latency — p95",
+          "description": "p95 response time. A spike here during the rollout indicates pods draining slowly.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 53, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "histogram_quantile(0.95, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "histogram_quantile(0.50, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
+              "legendFormat": "p50"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 500 },
+                  { "color": "red", "value": 2000 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 104,
+          "title": "Active VUs",
+          "description": "Virtual users k6 is running. Ramps to 50 at peak — if VUs spike toward maxVUs (100) it means responses are slow.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 53, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "k6_vus",
+              "legendFormat": "VUs"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 75 },
+                  { "color": "red", "value": 90 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 105,
+          "title": "Dropped Requests (this range)",
+          "description": "Total failed HTTP responses in the selected time range. For a zero-downtime deploy this should read 0.",
+          "type": "stat",
+          "gridPos": { "x": 0, "y": 61, "w": 12, "h": 6 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(increase(k6_http_req_failed_total[$__range]))",
+              "legendFormat": "failures"
+            }
+          ],
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 106,
+          "title": "Total Requests (this range)",
+          "description": "Total requests k6 sent in the selected range. Pairs with the failures count — e.g. 0 failures out of 14,000 requests means a clean deploy.",
+          "type": "stat",
+          "gridPos": { "x": 12, "y": 61, "w": 12, "h": 6 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(increase(k6_http_reqs_total[$__range]))",
+              "legendFormat": "requests"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "0",
+              "color": { "mode": "fixed", "fixedColor": "blue" }
+            }
+          }
+        },
+        {
+          "id": 107,
+          "title": "Dropped Requests Over Time",
+          "description": "Per-30s bucket of failed requests. Any non-zero bar marks the moment packets were dropped — correlate the timestamp with the rollout log to find which pod transition caused it.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 67, "w": 24, "h": 9 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(increase(k6_http_req_failed_total[30s]))",
+              "legendFormat": "failures / 30s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 70,
+                "lineWidth": 1
+              },
+              "color": { "mode": "fixed", "fixedColor": "red" }
+            }
+          }
+        },
+        {
+          "id": 108,
+          "title": "Requests vs Failures Over Time",
+          "description": "Both series on the same panel. Healthy deploy = green line flat at target RPS, red line flat at zero throughout the rollout window.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 76, "w": 24, "h": 9 },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(k6_http_reqs_total[30s]))",
+              "legendFormat": "requests/s"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(k6_http_req_failed_total[30s]))",
+              "legendFormat": "failures/s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "failures/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "requests/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+                ]
+              }
+            ]
+          }
         }
       ],
       "refresh": "5s",
@@ -426,267 +676,4 @@ data:
       "title": "ActivitiesApp Observability",
       "uid": "activitiesapp-observability",
       "version": 3
-    }
-  k6-zdd-dashboard.json: |
-    {
-      "title": "k6 — Zero Downtime Deploy",
-      "uid": "k6-zdd",
-      "schemaVersion": 38,
-      "refresh": "5s",
-      "time": { "from": "now-10m", "to": "now" },
-      "panels": [
-        {
-          "id": 1,
-          "title": "Requests per Second",
-          "description": "Should stay at ~100 RPS throughout the rollout. Any drop indicates a routing gap.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_reqs_total[15s]))",
-              "legendFormat": "RPS"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "reqps",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "red", "value": null },
-                  { "color": "yellow", "value": 80 },
-                  { "color": "green", "value": 95 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 2,
-          "title": "Error Rate",
-          "description": "Percentage of requests returning 5xx. Should be 0% throughout — any blip is a downtime event.",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_req_failed_total[15s])) / sum(rate(k6_http_reqs_total[15s])) * 100",
-              "legendFormat": "Error %"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "red", "value": 0.1 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 3,
-          "title": "Latency — p95",
-          "description": "p95 response time. A spike here during the rollout indicates pods draining slowly.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "histogram_quantile(0.95, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
-              "legendFormat": "p95"
-            },
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "histogram_quantile(0.50, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
-              "legendFormat": "p50"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ms",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 500 },
-                  { "color": "red", "value": 2000 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 4,
-          "title": "Active VUs",
-          "description": "Virtual users k6 is running. Ramps to 30 at peak — if VUs spike toward maxVUs (60) it means responses are slow.",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "k6_vus",
-              "legendFormat": "VUs"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 45 },
-                  { "color": "red", "value": 55 }
-                ]
-              }
-            }
-          }
-        }
-      ]
-    }
-  k6-errors-dashboard.json: |
-    {
-      "title": "k6 — Deploy Error Counts",
-      "uid": "k6-errors",
-      "schemaVersion": 38,
-      "refresh": "5s",
-      "time": { "from": "now-30m", "to": "now" },
-      "panels": [
-        {
-          "id": 1,
-          "title": "Dropped Requests (this range)",
-          "description": "Total failed HTTP responses in the selected time range. For a zero-downtime deploy this should read 0.",
-          "type": "stat",
-          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_req_failed_total[$__range]))",
-              "legendFormat": "failures"
-            }
-          ],
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "reduceOptions": { "calcs": ["lastNotNull"] },
-            "textMode": "value"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 0,
-              "noValue": "0",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "red", "value": 1 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 2,
-          "title": "Total Requests (this range)",
-          "description": "Total requests k6 sent in the selected range. Pairs with the failures count — e.g. 0 failures out of 14,000 requests means a clean deploy.",
-          "type": "stat",
-          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_reqs_total[$__range]))",
-              "legendFormat": "requests"
-            }
-          ],
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "reduceOptions": { "calcs": ["lastNotNull"] },
-            "textMode": "value"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 0,
-              "noValue": "0",
-              "color": { "mode": "fixed", "fixedColor": "blue" }
-            }
-          }
-        },
-        {
-          "id": 3,
-          "title": "Dropped Requests Over Time",
-          "description": "Per-30s bucket of failed requests. Any non-zero bar marks the moment packets were dropped — correlate the timestamp with the rollout log to find which pod transition caused it.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 6, "w": 24, "h": 9 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_req_failed_total[30s]))",
-              "legendFormat": "failures / 30s"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 0,
-              "custom": {
-                "drawStyle": "bars",
-                "fillOpacity": 70,
-                "lineWidth": 1
-              },
-              "color": { "mode": "fixed", "fixedColor": "red" }
-            }
-          }
-        },
-        {
-          "id": 4,
-          "title": "Requests vs Failures Over Time",
-          "description": "Both series on the same panel. Healthy deploy = green line flat at target RPS, red line flat at zero throughout the rollout window.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 15, "w": 24, "h": 9 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_reqs_total[30s]))",
-              "legendFormat": "requests/s"
-            },
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_req_failed_total[30s]))",
-              "legendFormat": "failures/s"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "reqps",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "lineWidth": 2
-              }
-            },
-            "overrides": [
-              {
-                "matcher": { "id": "byName", "options": "failures/s" },
-                "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
-                ]
-              },
-              {
-                "matcher": { "id": "byName", "options": "requests/s" },
-                "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
-                ]
-              }
-            ]
-          }
-        }
-      ]
     }
