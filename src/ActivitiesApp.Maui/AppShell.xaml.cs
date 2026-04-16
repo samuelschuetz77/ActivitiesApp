@@ -13,10 +13,10 @@ public partial class AppShell : Shell
     {
         base.OnNavigated(args);
 
-        if (CurrentPage is HomePage homePage &&
-            args.Source is ShellNavigationSource.ShellItemChanged
-                or ShellNavigationSource.ShellSectionChanged
-                or ShellNavigationSource.ShellContentChanged)
+        // Reset Home tab's BlazorWebView to "/" whenever Shell navigates
+        // to it, regardless of source. Covers tab switches, pop-to-root,
+        // and back-navigation that lands on the Home tab.
+        if (CurrentPage is HomePage homePage)
         {
             homePage.ResetToRoot();
         }
