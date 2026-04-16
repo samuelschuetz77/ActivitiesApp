@@ -6,17 +6,17 @@
     {
         <header class="app-header">
             <a class="app-brand" href="">
-                <span class="brand-name">ActivitiesApp</span>
+                <span class="brand-bold">Activities</span><span class="brand-light">App</span>
             </a>
             <NavMenu />
-            <div class="login-display">
+            <div class="header-right">
                 <AuthorizeView>
                     <Authorized>
-                        <span class="text-white me-2">Hello, @context.User.Identity?.Name</span>
-                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignOut">Sign Out</a>
+                        <span class="user-greeting">@context.User.Identity?.Name</span>
+                        <a class="auth-btn" href="MicrosoftIdentity/Account/SignOut">Sign Out</a>
                     </Authorized>
                     <NotAuthorized>
-                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignIn">Sign In</a>
+                        <a class="auth-btn" href="MicrosoftIdentity/Account/SignIn">Sign In</a>
                     </NotAuthorized>
                 </AuthorizeView>
             </div>
