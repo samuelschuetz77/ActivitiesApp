@@ -4,6 +4,7 @@
        xmlns:pages="clr-namespace:ActivitiesApp.Pages"
        x:Class="ActivitiesApp.AppShell"
        Shell.FlyoutBehavior="Disabled"
+       Shell.NavBarIsVisible="False"
        Shell.TabBarBackgroundColor="White"
        Shell.TabBarForegroundColor="#1b6ec2"
        Shell.TabBarUnselectedColor="#999999"

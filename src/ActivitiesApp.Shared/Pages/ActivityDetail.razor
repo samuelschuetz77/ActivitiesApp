@@ -6,6 +6,8 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
+<button class="back-button" @onclick="GoBack">&#8592; Back</button>
+
 <div class="detail-page">
     @if (activity == null)
     {
@@ -13,8 +15,6 @@
     }
     else
     {
-        <button class="back-button" @onclick="GoBack">Back</button>
-
         <div class="detail-card">
             <div class="detail-image">
                 @if (!string.IsNullOrEmpty(activity.ImageUrl))
