@@ -27,7 +27,7 @@ public class LocationAndAuthSeamTests
     }
 
     [Fact]
-    public async Task LocationService_ManualOverrideTakesPriority_AndErrorClearsGpsState()
+    public async Task LocationService_ManualOverrideTakesPriority_GpsStatePreservedOnTransientError()
     {
         var provider = new SequenceLocationProvider();
         provider.Enqueue(39.7392, -104.9903);
@@ -39,9 +39,9 @@ public class LocationAndAuthSeamTests
         await service.RefreshAsync();
 
         Assert.True(service.HasManualLocation);
-        Assert.False(service.HasLocation);
+        Assert.True(service.HasLocation);
         Assert.Equal(40, service.ActiveLatitude);
-        Assert.Equal("gps failed", service.LastError);
+        Assert.Null(service.LastError);
     }
 
     [Fact]
