@@ -278,7 +278,7 @@ jobs:
             web=${{ env.WEB_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} \
             --namespace=${{ env.NAMESPACE }}
           kubectl set env deployment/activitiesapp-api APP_VERSION=pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} --namespace=${{ env.NAMESPACE }}
-          kubectl set env deployment/activitiesapp-web APP_VERSION=pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} --namespace=${{ env.NAMESPACE }}
+          kubectl set env deployment/activitiesapp-web APP_VERSION=pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }} FeatureFlags__RadiusSlider=true --namespace=${{ env.NAMESPACE }}
 
       - name: Wait for rollouts
         run: |

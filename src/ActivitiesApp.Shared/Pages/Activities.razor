@@ -2,11 +2,13 @@
 @using ActivitiesApp.Shared.Models
 @using ActivitiesApp.Shared.Services
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Configuration
 @using Microsoft.JSInterop
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject ILogger<Activities> Logger
 @inject LocationService LocationService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @implements IDisposable
 
 <div class="activities-page">
@@ -79,12 +81,23 @@
     <div class="filter-bar">
         <div class="filter-item">
             <label>Radius</label>
-            <select class="filter-select" @bind="selectedRadius" @bind:after="OnRadiusChanged">
-                <option value="5">5 mi</option>
-                <option value="10">10 mi</option>
-                <option value="25">25 mi</option>
-                <option value="50">50 mi</option>
-            </select>
+            @if (radiusSlider.IsEnabled)
+            {
+                <div class="radius-slider-wrapper">
+                    <input type="range" min="1" max="100" class="radius-slider"
+                           @bind="selectedRadius" @bind:after="OnRadiusChanged" />
+                    <span class="radius-slider-value">@selectedRadius mi</span>
+                </div>
+            }
+            else
+            {
+                <select class="filter-select" @bind="selectedRadius" @bind:after="OnRadiusChanged">
+                    <option value="5">5 mi</option>
+                    <option value="10">10 mi</option>
+                    <option value="25">25 mi</option>
+                    <option value="50">50 mi</option>
+                </select>
+            }
         </div>
 
         <div class="filter-item">
@@ -198,6 +211,12 @@
 </div>
 
 @code {
+    private FeatureFlag radiusSlider = default!;
+
+    protected override void OnInitialized()
+    {
+        radiusSlider = new FeatureFlag("RadiusSlider", Configuration.GetValue<bool>("FeatureFlags:RadiusSlider"));
+    }
     private List<Activity>? allActivities;
     private List<Activity>? filteredActivities;
 
