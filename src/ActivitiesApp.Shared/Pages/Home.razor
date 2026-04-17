@@ -614,7 +614,14 @@
             List<Activity> source;
             double? lat = null, lng = null;
 
-            if (hasActiveLocation)
+            var isLocalEvents = string.Equals(tagName, "Local Events", StringComparison.OrdinalIgnoreCase);
+
+            if (isLocalEvents)
+            {
+                source = await ActivityService.ListActivitiesAsync();
+                if (hasActiveLocation) { lat = activeLat; lng = activeLng; }
+            }
+            else if (hasActiveLocation)
             {
                 var radiusMeters = (int)(HomeDiscoverRadiusMiles * MetersPerMile);
                 source = await ActivityService.DiscoverActivitiesAsync(activeLat, activeLng, radiusMeters, tagName);
@@ -627,7 +634,9 @@
                 source = await ActivityService.ListActivitiesAsync();
             }
 
-            var matchingActivities = ActivityFilterService.FilterAndSortByTag(source, tagName, lat, lng);
+            var matchingActivities = isLocalEvents
+                ? ActivityFilterService.GetLocalEvents(source, lat, lng)
+                : ActivityFilterService.FilterAndSortByTag(source, tagName, lat, lng);
 
             if (generation != cacheGeneration)
             {
