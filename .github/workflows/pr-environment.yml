@@ -82,7 +82,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Run all unit tests
-        run: find tests -name "*.csproj" ! -name "*.IntegrationTests.csproj" | xargs -I {} dotnet test {} --configuration Release --verbosity normal
+        run: find tests -name "*.csproj" ! -name "*.IntegrationTests.csproj" | xargs -I {} dotnet test {} --configuration Release --verbosity minimal
 
   push-api:
     name: Push API Image
