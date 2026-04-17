@@ -20,6 +20,8 @@ var activitiesCreatedCounter = appMeter.CreateCounter<long>(
 
 builder.AddServiceDefaults();
 
+//pool of HTTP clients for Google Places API calls
+
 builder.Services.AddMemoryCache();
 builder.Services.AddGrpc();
 
@@ -88,6 +90,10 @@ if (args.Contains("--migrate-only"))
     migrateLog.LogInformation("--migrate-only: applying Postgres migrations");
     using var migrateScope = app.Services.CreateScope();
     var pgCtx = migrateScope.ServiceProvider.GetRequiredService<PostgresDbContext>();
+    var discoveredMigrations = pgCtx.Database.GetMigrations().ToArray();
+    var pendingMigrations = pgCtx.Database.GetPendingMigrations().ToArray();
+    migrateLog.LogInformation("--migrate-only: discovered migrations: {Migrations}", string.Join(", ", discoveredMigrations));
+    migrateLog.LogInformation("--migrate-only: pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
     await pgCtx.Database.MigrateAsync();
     migrateLog.LogInformation("--migrate-only: migrations complete, exiting");
     return;
@@ -105,6 +111,10 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
+        var discoveredMigrations = pgContext.Database.GetMigrations().ToArray();
+        var pendingMigrations = pgContext.Database.GetPendingMigrations().ToArray();
+        startupLog.LogInformation("Postgres discovered migrations: {Migrations}", string.Join(", ", discoveredMigrations));
+        startupLog.LogInformation("Postgres pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
         await pgContext.Database.MigrateAsync();
         startupLog.LogInformation("Postgres migrations applied");
 
@@ -266,6 +276,13 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     var userId = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
         ?? httpContext.User.FindFirstValue("oid");
     activity.CreatedByUserId = userId;
+    activity.CreatedByDisplayName = httpContext.User.FindFirstValue("name")
+        ?? httpContext.User.FindFirstValue(System.Security.Claims.ClaimTypes.Name);
+    if (userId is not null)
+    {
+        var userSettings = await db.UserSettings.FirstOrDefaultAsync(u => u.UserId == userId);
+        activity.CreatedByProfilePictureUrl = userSettings?.ProfilePictureUrl;
+    }
     try
     {
         db.Activities.Add(activity);

@@ -84,7 +84,8 @@ public static class MauiProgram
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<ActivitiesViewModel>();
         builder.Services.AddTransient<CreateViewModel>();
-        builder.Services.AddTransient<ProfileViewModel>();
+        builder.Services.AddTransient<ProfileViewModel>(sp =>
+            new ProfileViewModel(sp.GetRequiredService<AuthService>(), sp.GetRequiredService<HttpClient>()));
 
         // Pages
         builder.Services.AddTransient<HomePage>();

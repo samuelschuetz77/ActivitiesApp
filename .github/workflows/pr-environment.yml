@@ -61,7 +61,7 @@ jobs:
         run: dotnet format --verify-no-changes src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
 
   test:
-    name: Test
+    name: Build and Test
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
@@ -262,6 +262,9 @@ jobs:
               nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
               nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/affinity: "cookie"
+              nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+              nginx.ingress.kubernetes.io/session-cookie-name: "route"
           spec:
             ingressClassName: nginx
             tls:

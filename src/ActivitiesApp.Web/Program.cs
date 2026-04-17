@@ -81,6 +81,13 @@ builder.Services.AddHttpClient<ActivityRestClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<IActivityService>(sp => sp.GetRequiredService<ActivityRestClient>());
+
+builder.Services.AddHttpClient<UserApiClient>(client =>
+{
+    client.BaseAddress = new Uri(apiAddress);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<IUserProfileService>(sp => sp.GetRequiredService<UserApiClient>());
 builder.Services.AddScoped<ILocationProvider, ActivitiesApp.Web.Services.JsLocationProvider>();
 builder.Services.AddScoped<LocationService>();
 
