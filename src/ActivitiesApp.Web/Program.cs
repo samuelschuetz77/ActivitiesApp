@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 
+// new push to test pipeline
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
