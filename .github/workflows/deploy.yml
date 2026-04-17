@@ -73,7 +73,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Run all unit tests
-        run: dotnet test --configuration Release --verbosity normal
+        run: dotnet test ActivitiesApp.sln --configuration Release --verbosity normal
 
   push-api:
     name: Push API Image
