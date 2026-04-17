@@ -108,16 +108,25 @@ using (var scope = app.Services.CreateScope())
         await pgContext.Database.MigrateAsync();
         startupLog.LogInformation("Postgres migrations applied");
 
-        // Seed from Cosmos -> Postgres only if Postgres is empty
-        var hasData = await pgContext.Activities.AnyAsync();
-        if (!hasData)
+        // Seed from Cosmos -> Postgres only if Postgres is empty.
+        // Advisory lock prevents the two replicas from racing to seed simultaneously.
+        await pgContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(202604161)");
+        try
         {
-            var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
-            await seedService.SeedAsync();
+            var hasData = await pgContext.Activities.AnyAsync();
+            if (!hasData)
+            {
+                var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
+                await seedService.SeedAsync();
+            }
+            else
+            {
+                startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            }
         }
-        else
+        finally
         {
-            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            await pgContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(202604161)");
         }
     }
     else
