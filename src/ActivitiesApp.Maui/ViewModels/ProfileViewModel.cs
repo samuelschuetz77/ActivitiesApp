@@ -13,10 +13,12 @@ public partial class ProfileViewModel : BaseViewModel
     private readonly HttpClient _http;
 
     [ObservableProperty] private string? _profilePictureUrl;
-    [ObservableProperty] private string? _profilePictureUrlEntry;
     [ObservableProperty] private string? _saveStatusMessage;
     [ObservableProperty] private bool _hasSaveMessage;
     [ObservableProperty] private bool _myActivitiesVisible;
+    [ObservableProperty] private bool _hasPendingPhoto;
+
+    private string? _pendingPhotoDataUrl;
 
     public ObservableCollection<Activity> MyActivities { get; } = [];
 
@@ -33,21 +35,29 @@ public partial class ProfileViewModel : BaseViewModel
         {
             var me = await _http.GetFromJsonAsync<UserProfile>("/api/auth/me");
             ProfilePictureUrl = me?.ProfilePictureUrl;
-            ProfilePictureUrlEntry = me?.ProfilePictureUrl;
         }
         catch { /* not signed in or offline */ }
+    }
+
+    public void SetPendingPhoto(string dataUrl)
+    {
+        _pendingPhotoDataUrl = dataUrl;
+        HasPendingPhoto = true;
     }
 
     [RelayCommand]
     private async Task SaveProfilePictureAsync()
     {
+        if (_pendingPhotoDataUrl is null) return;
         SaveStatusMessage = null;
         try
         {
-            var response = await _http.PutAsJsonAsync("/api/auth/me/settings", new { profilePictureUrl = ProfilePictureUrlEntry });
+            var response = await _http.PutAsJsonAsync("/api/auth/me/settings", new { profilePictureUrl = _pendingPhotoDataUrl });
             if (response.IsSuccessStatusCode)
             {
-                ProfilePictureUrl = ProfilePictureUrlEntry;
+                ProfilePictureUrl = _pendingPhotoDataUrl;
+                _pendingPhotoDataUrl = null;
+                HasPendingPhoto = false;
                 SaveStatusMessage = "Saved.";
             }
             else

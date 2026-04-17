@@ -26,18 +26,20 @@
                 </VerticalStackLayout>
             </HorizontalStackLayout>
 
-            <!-- Profile picture URL -->
-            <Label Text="Profile Picture URL" FontAttributes="Bold" FontSize="14" />
-            <Entry x:Name="PfpEntry"
-                   Placeholder="https://..."
-                   Text="{Binding ProfilePictureUrlEntry}"
-                   Keyboard="Url" />
+            <!-- Profile picture upload -->
+            <Button Text="Choose Photo"
+                    Clicked="OnChoosePhotoClicked"
+                    BackgroundColor="#6c757d"
+                    TextColor="White"
+                    CornerRadius="8"
+                    Padding="16,10" />
             <Button Text="Save Profile Picture"
                     Command="{Binding SaveProfilePictureCommand}"
                     BackgroundColor="#0d6efd"
                     TextColor="White"
                     CornerRadius="8"
-                    Padding="16,10" />
+                    Padding="16,10"
+                    IsEnabled="{Binding HasPendingPhoto}" />
             <Label Text="{Binding SaveStatusMessage}"
                    TextColor="#198754"
                    FontSize="13"

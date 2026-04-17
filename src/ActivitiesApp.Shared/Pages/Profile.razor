@@ -1,5 +1,6 @@
 @page "/profile"
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using ActivitiesApp.Shared.Models
 @inject IFormFactor FormFactor
 
@@ -39,19 +40,22 @@
                         </div>
                     </div>
 
-                    @* Profile picture URL input *@
+                    @* Profile picture upload *@
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Profile Picture URL</label>
-                        <div class="input-group">
-                            <input type="url" class="form-control" placeholder="https://..."
-                                   @bind="_profilePictureUrl" />
-                            <button class="btn btn-primary" @onclick="SaveSettingsAsync" disabled="@_saving">
-                                @(_saving ? "Saving..." : "Save")
+                        <label class="form-label fw-semibold">Profile Picture</label>
+                        <InputFile OnChange="OnPfpSelected" accept="image/*" class="form-control mb-2" />
+                        @if (_pfpError is not null)
+                        {
+                            <small class="text-danger">@_pfpError</small>
+                        }
+                        <div class="mt-2">
+                            <button class="btn btn-primary" @onclick="SaveSettingsAsync" disabled="@(_saving || _profilePictureUrl is null)">
+                                @(_saving ? "Saving..." : "Save Picture")
                             </button>
                         </div>
                         @if (_saveMessage is not null)
                         {
-                            <small class="@(_saveError ? "text-danger" : "text-success")">@_saveMessage</small>
+                            <small class="@(_saveError ? "text-danger" : "text-success") d-block mt-1">@_saveMessage</small>
                         }
                     </div>
 
@@ -116,6 +120,8 @@
     [Inject] private IUserProfileService? UserApiClient { get; set; }
 
     private string? _profilePictureUrl;
+    private string? _pfpError;
+    private const long MaxPfpSize = 2 * 1024 * 1024; // 2MB
     private List<Activity> _myActivities = [];
     private bool _loadingActivities;
     private bool _saving;
@@ -144,6 +150,30 @@
         {
             _loadingActivities = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task OnPfpSelected(InputFileChangeEventArgs e)
+    {
+        _pfpError = null;
+        var file = e.File;
+        if (file.Size > MaxPfpSize)
+        {
+            _pfpError = $"File exceeds 2MB limit.";
+            return;
+        }
+        try
+        {
+            using var stream = file.OpenReadStream(MaxPfpSize);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            _profilePictureUrl = $"data:{file.ContentType};base64,{base64}";
+            _saveMessage = null;
+        }
+        catch
+        {
+            _pfpError = "Failed to read image.";
         }
     }
 
