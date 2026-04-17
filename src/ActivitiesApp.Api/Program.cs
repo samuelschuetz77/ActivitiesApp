@@ -90,6 +90,10 @@ if (args.Contains("--migrate-only"))
     migrateLog.LogInformation("--migrate-only: applying Postgres migrations");
     using var migrateScope = app.Services.CreateScope();
     var pgCtx = migrateScope.ServiceProvider.GetRequiredService<PostgresDbContext>();
+    var discoveredMigrations = (await pgCtx.Database.GetMigrationsAsync()).ToArray();
+    var pendingMigrations = (await pgCtx.Database.GetPendingMigrationsAsync()).ToArray();
+    migrateLog.LogInformation("--migrate-only: discovered migrations: {Migrations}", string.Join(", ", discoveredMigrations));
+    migrateLog.LogInformation("--migrate-only: pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
     await pgCtx.Database.MigrateAsync();
     migrateLog.LogInformation("--migrate-only: migrations complete, exiting");
     return;
@@ -107,6 +111,10 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
+        var discoveredMigrations = (await pgContext.Database.GetMigrationsAsync()).ToArray();
+        var pendingMigrations = (await pgContext.Database.GetPendingMigrationsAsync()).ToArray();
+        startupLog.LogInformation("Postgres discovered migrations: {Migrations}", string.Join(", ", discoveredMigrations));
+        startupLog.LogInformation("Postgres pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
         await pgContext.Database.MigrateAsync();
         startupLog.LogInformation("Postgres migrations applied");
 
