@@ -20,6 +20,8 @@ var activitiesCreatedCounter = appMeter.CreateCounter<long>(
 
 builder.AddServiceDefaults();
 
+//pool of HTTP clients for Google Places API calls
+
 builder.Services.AddMemoryCache();
 builder.Services.AddGrpc();
 
