@@ -3,6 +3,7 @@ using ActivitiesApp.Shared.Services;
 using ActivitiesApp.Web.Services;
 using LocationService = ActivitiesApp.Shared.Services.LocationService;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
@@ -12,6 +13,12 @@ using Microsoft.Identity.Web.UI;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+// Persist Data Protection keys so OIDC correlation cookies survive pod restarts and work across replicas
+var dpKeysPath = builder.Configuration["DataProtectionKeysPath"] ?? "/data-protection-keys";
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath))
+    .SetApplicationName("ActivitiesApp");
 
 // Trust X-Forwarded-Proto from nginx ingress
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

@@ -82,3 +82,10 @@ spec:
               port: 8080
             periodSeconds: 30
             failureThreshold: 3
+          volumeMounts:
+            - name: dp-keys
+              mountPath: /data-protection-keys
+      volumes:
+        - name: dp-keys
+          persistentVolumeClaim:
+            claimName: web-dp-keys-pvc
