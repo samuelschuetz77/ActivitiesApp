@@ -83,7 +83,6 @@ var app = builder.Build();
 
 var startupLog = app.Services.GetRequiredService<ILogger<Program>>();
 var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
-startupLog.LogInformation("Automatic DB migrations enabled on startup");
 startupLog.LogInformation("API starting — DbProvider={DbProvider}, Version={Version}, Env={Env}",
     dbProvider, appVersion, app.Environment.EnvironmentName);
 
@@ -93,8 +92,6 @@ using (var scope = app.Services.CreateScope())
     if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
-        await pgContext.Database.MigrateAsync();
-        startupLog.LogInformation("Postgres migrations applied");
 
         // Seed from Cosmos -> Postgres only if Postgres is empty
         var hasData = await pgContext.Activities.AnyAsync();
