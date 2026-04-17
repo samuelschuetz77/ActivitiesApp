@@ -9,7 +9,8 @@ public static class ImageUrlResolver
             return null;
         }
 
-        if (Uri.TryCreate(imageUrl, UriKind.Absolute, out _))
+        if (imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             return imageUrl;
         }
