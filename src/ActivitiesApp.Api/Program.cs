@@ -81,6 +81,18 @@ builder.Services.AddHttpClient<GooglePlacesService>();
 
 var app = builder.Build();
 
+// Migration-only mode: run by the Kubernetes Job before the rolling deploy, then exit.
+if (args.Contains("--migrate-only"))
+{
+    var migrateLog = app.Services.GetRequiredService<ILogger<Program>>();
+    migrateLog.LogInformation("--migrate-only: applying Postgres migrations");
+    using var migrateScope = app.Services.CreateScope();
+    var pgCtx = migrateScope.ServiceProvider.GetRequiredService<PostgresDbContext>();
+    await pgCtx.Database.MigrateAsync();
+    migrateLog.LogInformation("--migrate-only: migrations complete, exiting");
+    return;
+}
+
 var startupLog = app.Services.GetRequiredService<ILogger<Program>>();
 var appVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "dev";
 startupLog.LogInformation("Automatic DB migrations enabled on startup");

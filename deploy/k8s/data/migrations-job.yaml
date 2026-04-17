@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: activitiesapp
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: IMAGE_PLACEHOLDER
+          command: ["dotnet", "ActivitiesApp.Api.dll", "--migrate-only"]
+          env:
+            - name: DATABASE_PROVIDER
+              value: Postgres
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: activitiesdb
+            - name: POSTGRES_USER
+              value: activitiesapp
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

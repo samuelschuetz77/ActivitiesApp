@@ -228,6 +228,21 @@ jobs:
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/data/postgres-dep.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/data/postgres-svc.yaml | kubectl apply -f -
 
+      - name: Wait for PostgreSQL
+        run: kubectl rollout status deployment/postgres --namespace=${{ env.NAMESPACE }} --timeout=90s
+
+      - name: Run database migrations
+        run: |
+          kubectl delete job db-migrate --namespace=${{ env.NAMESPACE }} --ignore-not-found=true
+          sed \
+            -e 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' \
+            -e "s|IMAGE_PLACEHOLDER|${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}|g" \
+            deploy/k8s/data/migrations-job.yaml | kubectl apply -f -
+          kubectl wait job/db-migrate \
+            --namespace=${{ env.NAMESPACE }} \
+            --for=condition=complete \
+            --timeout=120s
+
       - name: Deploy API
         run: |
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/api-dep.yaml | kubectl apply -f -
