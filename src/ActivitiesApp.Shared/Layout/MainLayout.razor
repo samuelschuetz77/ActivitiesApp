@@ -13,10 +13,10 @@
                 <AuthorizeView>
                     <Authorized>
                         <span class="text-white me-2">Hello, @context.User.Identity?.Name</span>
-                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignOut">Sign Out</a>
+                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignOut" data-enhance-nav="false">Sign Out</a>
                     </Authorized>
                     <NotAuthorized>
-                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignIn">Sign In</a>
+                        <a class="btn btn-outline-light btn-sm" href="MicrosoftIdentity/Account/SignIn" data-enhance-nav="false">Sign In</a>
                     </NotAuthorized>
                 </AuthorizeView>
             </div>

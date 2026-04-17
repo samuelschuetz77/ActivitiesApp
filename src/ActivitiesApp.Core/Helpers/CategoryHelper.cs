@@ -17,6 +17,7 @@ public static class CategoryHelper
         new("Fitness & Sports", "\ud83c\udfcb\ufe0f"),
         new("Wellness & Beauty", "\u2728"),
         new("Education", "\ud83c\udf93"),
+        new("Local Events", "\ud83d\udccd"),
     ];
 
     private static readonly Dictionary<string, string> TagIconMap =

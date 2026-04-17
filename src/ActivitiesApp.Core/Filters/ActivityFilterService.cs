@@ -34,6 +34,20 @@ public static class ActivityFilterService
         return matching.OrderByDescending(a => a.Rating).ToList();
     }
 
+    /// <summary>
+    /// Returns user-created activities (no PlaceId), sorted by distance then rating.
+    /// </summary>
+    public static List<Activity> GetLocalEvents(IEnumerable<Activity> activities, double? lat = null, double? lng = null)
+    {
+        var matching = activities.Where(a => string.IsNullOrEmpty(a.PlaceId));
+        if (lat.HasValue && lng.HasValue)
+            return matching
+                .OrderBy(a => GeoCalculator.HaversineDistance(lat.Value, lng.Value, a.Latitude, a.Longitude))
+                .ThenByDescending(a => a.Rating)
+                .ToList();
+        return matching.OrderByDescending(a => a.Rating).ToList();
+    }
+
     public static IEnumerable<Activity> ApplyDropdownFilters(IEnumerable<Activity> query, ActivityFilterCriteria criteria)
     {
         if (!string.IsNullOrEmpty(criteria.Cost))

@@ -75,6 +75,31 @@ public class OfflineActivityService : IActivityService
             sw.ElapsedMilliseconds,
             result.Count,
             result.Count(a => !string.IsNullOrWhiteSpace(a.ImageUrl)));
+
+        if (_networkStatus.HasInternet)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var activities = await _http.GetFromJsonAsync<List<Activity>>("/api/activities");
+                    if (activities != null)
+                    {
+                        await _store.SaveActivitiesAsync(
+                            activities.Select(a => ActivityMapping.ToLocalActivity(a, SyncState.Synced)),
+                            CancellationToken.None);
+                        foreach (var a in activities)
+                            _cache.AddOrUpdate(NormalizeActivity(a)!, suppressNotify: true);
+                        DataChanged?.Invoke();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ListActivitiesAsync: background refresh failed");
+                }
+            });
+        }
+
         return Task.FromResult(result);
     }
 
@@ -82,9 +107,11 @@ public class OfflineActivityService : IActivityService
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var radiusMiles = radiusMeters / 1609.34;
+        var isLocalEvents = string.Equals(tagName, "Local Events", StringComparison.OrdinalIgnoreCase);
         var cached = NormalizeActivities(_cache.GetAll())
             .Where(a => GetDistanceMiles(lat, lng, a.Latitude, a.Longitude) <= radiusMiles)
-            .Where(a => string.IsNullOrWhiteSpace(tagName) || HasTag(a.Category, tagName))
+            .Where(a => string.IsNullOrWhiteSpace(tagName)
+                || (isLocalEvents ? string.IsNullOrEmpty(a.PlaceId) : HasTag(a.Category, tagName)))
             .ToList();
 
         if (cached.Count == 0)
