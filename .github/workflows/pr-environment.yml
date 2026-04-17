@@ -61,7 +61,7 @@ jobs:
         run: dotnet format --verify-no-changes src/ActivitiesApp.Web/ActivitiesApp.Web.csproj
 
   test:
-    name: Test
+    name: Build and Test
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:

@@ -67,7 +67,11 @@
       "Bash(python -c \"import docx; print\\('python-docx ok'\\)\")",
       "Bash(pandoc --version)",
       "Bash(python -c \"import docx; print\\('installed'\\)\")",
-      "Bash(python generate_writeup.py)"
+      "Bash(python generate_writeup.py)",
+      "Bash(kubectl get *)",
+      "Bash(wsl *)",
+      "Bash(cmd *)",
+      "Bash(powershell *)"
     ]
   }
 }

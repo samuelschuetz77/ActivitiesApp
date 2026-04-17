@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ActivitiesApp.Infrastructure.Migrations.Migrations
 {
+    [Migration("20260417000001_AddCreatorInfoAndUserSettings")]
     public partial class AddCreatorInfoAndUserSettings : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

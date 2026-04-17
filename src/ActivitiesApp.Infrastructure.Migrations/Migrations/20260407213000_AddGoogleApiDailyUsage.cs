@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ActivitiesApp.Infrastructure.Migrations.Migrations
 {
+    [Migration("20260407213000_AddGoogleApiDailyUsage")]
     public partial class AddGoogleApiDailyUsage : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

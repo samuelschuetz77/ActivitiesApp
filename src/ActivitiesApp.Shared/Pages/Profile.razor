@@ -122,21 +122,28 @@
     private string? _saveMessage;
     private bool _saveError;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (UserApiClient is null || FormFactor.IsNative) return;
+        if (!firstRender || UserApiClient is null || FormFactor.IsNative) return;
 
-        var me = await UserApiClient.GetMeAsync();
-        _profilePictureUrl = me?.ProfilePictureUrl;
+        try
+        {
+            var me = await UserApiClient.GetMeAsync();
+            _profilePictureUrl = me?.ProfilePictureUrl;
+        }
+        catch { /* not signed in or token not yet cached */ }
 
         _loadingActivities = true;
+        StateHasChanged();
         try
         {
             _myActivities = await UserApiClient.GetMyActivitiesAsync();
         }
+        catch { /* not signed in or offline */ }
         finally
         {
             _loadingActivities = false;
+            StateHasChanged();
         }
     }
 
