@@ -7,6 +7,7 @@ public class PostgresDbContext : DbContext, IActivityDbContext
 {
     public DbSet<Activity> Activities { get; set; }
     public DbSet<GoogleApiDailyUsage> GoogleApiDailyUsages { get; set; }
+    public DbSet<UserSettings> UserSettings { get; set; }
 
     public PostgresDbContext(DbContextOptions<PostgresDbContext> options) : base(options)
     {
@@ -37,11 +38,21 @@ public class PostgresDbContext : DbContext, IActivityDbContext
             entity.Property(a => a.UpdatedAt).HasColumnName("updated_at");
             entity.Property(a => a.IsDeleted).HasColumnName("is_deleted");
             entity.Property(a => a.CreatedByUserId).HasColumnName("created_by_user_id").HasMaxLength(450);
+            entity.Property(a => a.CreatedByDisplayName).HasColumnName("created_by_display_name").HasMaxLength(500);
+            entity.Property(a => a.CreatedByProfilePictureUrl).HasColumnName("created_by_profile_picture_url");
 
             entity.HasIndex(a => a.PlaceId);
             entity.HasIndex(a => a.City);
             entity.HasIndex(a => a.UpdatedAt);
             entity.HasIndex(a => a.CreatedByUserId);
+        });
+
+        modelBuilder.Entity<UserSettings>(entity =>
+        {
+            entity.ToTable("user_settings");
+            entity.HasKey(u => u.UserId);
+            entity.Property(u => u.UserId).HasColumnName("user_id").HasMaxLength(450);
+            entity.Property(u => u.ProfilePictureUrl).HasColumnName("profile_picture_url");
         });
 
         modelBuilder.Entity<GoogleApiDailyUsage>(entity =>

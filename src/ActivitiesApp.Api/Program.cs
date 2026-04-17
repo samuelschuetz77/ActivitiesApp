@@ -266,6 +266,13 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     var userId = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
         ?? httpContext.User.FindFirstValue("oid");
     activity.CreatedByUserId = userId;
+    activity.CreatedByDisplayName = httpContext.User.FindFirstValue("name")
+        ?? httpContext.User.FindFirstValue(System.Security.Claims.ClaimTypes.Name);
+    if (userId is not null)
+    {
+        var userSettings = await db.UserSettings.FirstOrDefaultAsync(u => u.UserId == userId);
+        activity.CreatedByProfilePictureUrl = userSettings?.ProfilePictureUrl;
+    }
     try
     {
         db.Activities.Add(activity);

@@ -1,4 +1,5 @@
 using ActivitiesApp.Infrastructure.Data;
+using ActivitiesApp.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -10,7 +11,7 @@ public static class AuthEndpoints
     {
         var auth = app.MapGroup("/api/auth");
 
-        auth.MapGet("/me", (HttpContext httpContext) =>
+        auth.MapGet("/me", async (HttpContext httpContext, IActivityDbContext db) =>
         {
             var oid = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
                    ?? httpContext.User.FindFirstValue("oid");
@@ -23,11 +24,37 @@ public static class AuthEndpoints
 
             if (oid is null) return Results.Unauthorized();
 
+            var settings = await db.UserSettings.FirstOrDefaultAsync(u => u.UserId == oid);
+
             return Results.Ok(new UserProfile
             {
                 UserId = oid,
                 Email = email,
-                DisplayName = name
+                DisplayName = name,
+                ProfilePictureUrl = settings?.ProfilePictureUrl
+            });
+        }).RequireAuthorization();
+
+        auth.MapPut("/me/settings", async (HttpContext httpContext, IActivityDbContext db, UserSettingsRequest body) =>
+        {
+            var oid = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+                   ?? httpContext.User.FindFirstValue("oid");
+            if (oid is null) return Results.Unauthorized();
+
+            var settings = await db.UserSettings.FirstOrDefaultAsync(u => u.UserId == oid);
+            if (settings is null)
+            {
+                settings = new UserSettings { UserId = oid };
+                db.UserSettings.Add(settings);
+            }
+
+            settings.ProfilePictureUrl = body.ProfilePictureUrl;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new UserProfile
+            {
+                UserId = oid,
+                ProfilePictureUrl = settings.ProfilePictureUrl
             });
         }).RequireAuthorization();
 
@@ -53,4 +80,10 @@ public record UserProfile
     public string UserId { get; set; } = "";
     public string Email { get; set; } = "";
     public string DisplayName { get; set; } = "";
+    public string? ProfilePictureUrl { get; set; }
+}
+
+public record UserSettingsRequest
+{
+    public string? ProfilePictureUrl { get; set; }
 }

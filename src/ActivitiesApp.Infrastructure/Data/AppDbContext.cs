@@ -7,6 +7,7 @@ namespace ActivitiesApp.Infrastructure.Data
     {
         public DbSet<Activity> Activities { get; set; }
         public DbSet<GoogleApiDailyUsage> GoogleApiDailyUsages { get; set; }
+        public DbSet<UserSettings> UserSettings { get; set; }
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
@@ -86,6 +87,27 @@ namespace ActivitiesApp.Infrastructure.Data
             modelBuilder.Entity<Activity>()
                 .Property(a => a.CreatedByUserId)
                 .ToJsonProperty("createdByUserId");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.CreatedByDisplayName)
+                .ToJsonProperty("createdByDisplayName");
+
+            modelBuilder.Entity<Activity>()
+                .Property(a => a.CreatedByProfilePictureUrl)
+                .ToJsonProperty("createdByProfilePictureUrl");
+
+            modelBuilder.Entity<UserSettings>()
+                .ToContainer("UserSettings")
+                .HasPartitionKey(u => u.UserId)
+                .HasKey(u => u.UserId);
+
+            modelBuilder.Entity<UserSettings>()
+                .Property(u => u.UserId)
+                .ToJsonProperty("id");
+
+            modelBuilder.Entity<UserSettings>()
+                .Property(u => u.ProfilePictureUrl)
+                .ToJsonProperty("profilePictureUrl");
 
             modelBuilder.Entity<GoogleApiDailyUsage>()
                 .ToContainer("GoogleApiDailyUsage")

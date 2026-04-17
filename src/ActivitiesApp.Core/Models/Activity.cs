@@ -41,4 +41,6 @@ public class Activity
     public DateTimeOffset UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
     public string? CreatedByUserId { get; set; }
+    public string? CreatedByDisplayName { get; set; }
+    public string? CreatedByProfilePictureUrl { get; set; }
 }

@@ -48,6 +48,15 @@ namespace ActivitiesApp.Infrastructure.Migrations.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("cost");
 
+                    b.Property<string>("CreatedByDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("created_by_display_name");
+
+                    b.Property<string>("CreatedByProfilePictureUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by_profile_picture_url");
+
                     b.Property<string>("CreatedByUserId")
                         .HasMaxLength(450)
                         .HasColumnType("character varying(450)")
@@ -112,6 +121,22 @@ namespace ActivitiesApp.Infrastructure.Migrations.Migrations
                     b.HasIndex("UpdatedAt");
 
                     b.ToTable("activities", (string)null);
+                });
+
+            modelBuilder.Entity("ActivitiesApp.Infrastructure.Models.UserSettings", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("ProfilePictureUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("profile_picture_url");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_settings", (string)null);
                 });
 
             modelBuilder.Entity("ActivitiesApp.Infrastructure.Models.GoogleApiDailyUsage", b =>

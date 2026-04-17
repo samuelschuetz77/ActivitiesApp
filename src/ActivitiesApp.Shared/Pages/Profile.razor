@@ -1,5 +1,6 @@
 @page "/profile"
 @using Microsoft.AspNetCore.Components.Authorization
+@using ActivitiesApp.Shared.Models
 @inject IFormFactor FormFactor
 
 <PageTitle>Profile</PageTitle>
@@ -18,27 +19,146 @@
         {
             <AuthorizeView>
                 <Authorized>
-                    <p class="mb-3">
-                        Signed in as <strong>@context.User.Identity?.Name</strong>
-                    </p>
+                    @* Profile picture *@
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        @if (!string.IsNullOrWhiteSpace(_profilePictureUrl))
+                        {
+                            <img src="@_profilePictureUrl" alt="Profile" class="rounded-circle"
+                                 style="width:72px;height:72px;object-fit:cover;" />
+                        }
+                        else
+                        {
+                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold"
+                                 style="width:72px;height:72px;font-size:1.5rem;">
+                                @(context.User.Identity?.Name?.Substring(0, 1).ToUpper() ?? "?")
+                            </div>
+                        }
+                        <div>
+                            <div class="fw-semibold">@context.User.Identity?.Name</div>
+                            <small class="text-muted">Signed in</small>
+                        </div>
+                    </div>
+
+                    @* Profile picture URL input *@
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Profile Picture URL</label>
+                        <div class="input-group">
+                            <input type="url" class="form-control" placeholder="https://..."
+                                   @bind="_profilePictureUrl" />
+                            <button class="btn btn-primary" @onclick="SaveSettingsAsync" disabled="@_saving">
+                                @(_saving ? "Saving..." : "Save")
+                            </button>
+                        </div>
+                        @if (_saveMessage is not null)
+                        {
+                            <small class="@(_saveError ? "text-danger" : "text-success")">@_saveMessage</small>
+                        }
+                    </div>
+
+                    <hr />
+
+                    @* My Activities *@
+                    <h5 class="mb-3">My Activities</h5>
+                    @if (_loadingActivities)
+                    {
+                        <p class="text-muted">Loading...</p>
+                    }
+                    else if (_myActivities.Count == 0)
+                    {
+                        <p class="text-muted">No activities created yet.</p>
+                    }
+                    else
+                    {
+                        <div class="row g-3">
+                            @foreach (var a in _myActivities)
+                            {
+                                <div class="col-12 col-md-6">
+                                    <div class="card border-0 shadow-sm h-100">
+                                        @if (!string.IsNullOrWhiteSpace(a.ImageUrl))
+                                        {
+                                            <img src="@a.ImageUrl" class="card-img-top" style="height:140px;object-fit:cover;" alt="@a.Name" />
+                                        }
+                                        <div class="card-body">
+                                            <h6 class="card-title mb-1">@a.Name</h6>
+                                            <small class="text-muted">@a.City</small>
+                                            @if (!string.IsNullOrWhiteSpace(a.Category))
+                                            {
+                                                <div><span class="badge bg-secondary mt-1">@a.Category</span></div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <hr class="mt-4" />
                     <a class="btn btn-outline-danger" href="MicrosoftIdentity/Account/SignOut">
                         Sign Out
                     </a>
                 </Authorized>
                 <NotAuthorized>
                     <p class="text-muted mb-3">
-                        Use the hosted Azure sign-in flow from this page. The OIDC callback is handled after Microsoft Entra redirects back to the app.
+                        Use the hosted Azure sign-in flow from this page.
                     </p>
                     <div class="d-flex flex-wrap gap-2">
                         <a class="btn btn-primary" href="MicrosoftIdentity/Account/SignIn">
                             Sign In
                         </a>
-                        <span class="btn btn-outline-secondary disabled" aria-disabled="true">
-                            Kubernetes Route Pending
-                        </span>
                     </div>
                 </NotAuthorized>
             </AuthorizeView>
         }
     </div>
 </div>
+
+@code {
+    [Inject] private IUserProfileService? UserApiClient { get; set; }
+
+    private string? _profilePictureUrl;
+    private List<Activity> _myActivities = [];
+    private bool _loadingActivities;
+    private bool _saving;
+    private string? _saveMessage;
+    private bool _saveError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserApiClient is null || FormFactor.IsNative) return;
+
+        var me = await UserApiClient.GetMeAsync();
+        _profilePictureUrl = me?.ProfilePictureUrl;
+
+        _loadingActivities = true;
+        try
+        {
+            _myActivities = await UserApiClient.GetMyActivitiesAsync();
+        }
+        finally
+        {
+            _loadingActivities = false;
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (UserApiClient is null) return;
+        _saving = true;
+        _saveMessage = null;
+        try
+        {
+            var result = await UserApiClient.SaveSettingsAsync(_profilePictureUrl);
+            _saveMessage = result is not null ? "Saved." : "Failed to save.";
+            _saveError = result is null;
+        }
+        catch
+        {
+            _saveMessage = "Error saving settings.";
+            _saveError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

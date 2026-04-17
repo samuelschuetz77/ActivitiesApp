@@ -1,30 +1,89 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ActivitiesApp.ViewModels"
+             xmlns:models="clr-namespace:ActivitiesApp.Shared.Models;assembly=ActivitiesApp.Shared"
              x:Class="ActivitiesApp.Pages.ProfilePage"
+             x:DataType="vm:ProfileViewModel"
              Title="Profile">
 
-    <VerticalStackLayout Padding="20" VerticalOptions="Center" Spacing="16">
-        <Label Text="Profile"
-               FontSize="24"
-               FontAttributes="Bold"
-               HorizontalOptions="Center" />
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
 
-        <Label x:Name="WelcomeLabel"
-               Text="Hello, you are logged in as ..."
-               FontSize="16"
-               HorizontalOptions="Center"
-               TextColor="#333333" />
+            <!-- Profile picture + user info -->
+            <HorizontalStackLayout Spacing="16" VerticalOptions="Center">
+                <Image x:Name="ProfileImage"
+                       WidthRequest="72" HeightRequest="72"
+                       Aspect="AspectFill">
+                    <Image.Clip>
+                        <EllipseGeometry Center="36,36" RadiusX="36" RadiusY="36" />
+                    </Image.Clip>
+                </Image>
+                <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                    <Label x:Name="WelcomeLabel"
+                           FontSize="16" FontAttributes="Bold" TextColor="#333333" />
+                    <Label Text="Signed in" FontSize="12" TextColor="#888888" />
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
 
-        <Button Text="Sign Out"
-                Clicked="OnSignOutClicked"
-                BackgroundColor="#dc3545"
-                TextColor="White"
-                FontSize="16"
-                Padding="20,12"
-                CornerRadius="8"
-                HorizontalOptions="Center"
-                Margin="0,20,0,0" />
-    </VerticalStackLayout>
+            <!-- Profile picture URL -->
+            <Label Text="Profile Picture URL" FontAttributes="Bold" FontSize="14" />
+            <Entry x:Name="PfpEntry"
+                   Placeholder="https://..."
+                   Text="{Binding ProfilePictureUrlEntry}"
+                   Keyboard="Url" />
+            <Button Text="Save Profile Picture"
+                    Command="{Binding SaveProfilePictureCommand}"
+                    BackgroundColor="#0d6efd"
+                    TextColor="White"
+                    CornerRadius="8"
+                    Padding="16,10" />
+            <Label Text="{Binding SaveStatusMessage}"
+                   TextColor="#198754"
+                   FontSize="13"
+                   IsVisible="{Binding HasSaveMessage}" />
+
+            <BoxView HeightRequest="1" Color="#e0e0e0" Margin="0,8" />
+
+            <!-- My Activities toggle -->
+            <Button Text="My Activities ▼"
+                    Command="{Binding ToggleMyActivitiesCommand}"
+                    BackgroundColor="#f8f9fa"
+                    TextColor="#333333"
+                    BorderColor="#dee2e6"
+                    BorderWidth="1"
+                    CornerRadius="8"
+                    Padding="16,10" />
+
+            <CollectionView ItemsSource="{Binding MyActivities}"
+                            IsVisible="{Binding MyActivitiesVisible}"
+                            EmptyView="No activities yet.">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Activity">
+                        <Frame Margin="0,4" Padding="12" CornerRadius="8" BorderColor="#dee2e6" HasShadow="False">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="15" />
+                                <Label Text="{Binding City}" FontSize="13" TextColor="#888888" />
+                                <Label Text="{Binding Category}" FontSize="12" TextColor="#6c757d" />
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <BoxView HeightRequest="1" Color="#e0e0e0" Margin="0,8" />
+
+            <!-- Sign out -->
+            <Button Text="Sign Out"
+                    Clicked="OnSignOutClicked"
+                    BackgroundColor="#dc3545"
+                    TextColor="White"
+                    FontSize="16"
+                    Padding="20,12"
+                    CornerRadius="8"
+                    HorizontalOptions="Start" />
+
+        </VerticalStackLayout>
+    </ScrollView>
 
 </ContentPage>
