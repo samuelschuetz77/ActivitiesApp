@@ -81,23 +81,8 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      # Keep CI scoped to server-side projects.
-      # Do not run solution-level restore/test here because ActivitiesApp.sln includes
-      # AppHost -> MAUI, which pulls platform workloads not installed on Linux runners.
-      - name: Build API
-        run: dotnet build src/ActivitiesApp.Api/ActivitiesApp.Api.csproj --configuration Release --no-restore --verbosity normal
-
-      - name: Build Web
-        run: dotnet build src/ActivitiesApp.Web/ActivitiesApp.Web.csproj --configuration Release --no-restore --verbosity normal
-
-      - name: Run API unit tests
-        run: dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
-
-      - name: Run Core unit tests
-        run: dotnet test tests/ActivitiesApp.Core.Tests/ActivitiesApp.Core.Tests.csproj --configuration Release --verbosity normal
-
-      - name: Run Infrastructure unit tests
-        run: dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
+      - name: Run all unit tests
+        run: find tests -name "*.csproj" ! -name "*.IntegrationTests.csproj" | xargs -I {} dotnet test {} --configuration Release --verbosity minimal
 
   push-api:
     name: Push API Image

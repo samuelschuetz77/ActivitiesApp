@@ -1,5 +1,31 @@
 # Iteration Log
 
+## 2026-04-17 — Core unit + integration tests
+
+### What was added
+Four new test files in `tests/ActivitiesApp.Core.Tests/`:
+
+- **`HelpersTests.cs`** (37 tests) — covers ActivityFormatter, ZipCodeValidator, CategoryHelper,
+  AddressBuilder, GeoCalculator, QuotaWarningHelper, ImageUrlResolver
+- **`ActivityFilterServiceTests.cs`** (13 tests) — cost tiers (free/$/$$/$$), category,
+  age range, location radius, FilterAndSortByTag (with/without location), Filter (search + filters combined)
+- **`FuzzySearchServiceTests.cs`** (13 tests) — empty query, exact/partial name match,
+  misspelling tolerance, synonym resolution (bar→Nightlife, hike→Outdoors, food→Restaurant+FastFood),
+  score ordering, SearchOrAll
+- **`FilterPipelineIntegrationTests.cs`** (7 tests) — integration tests: full pipeline of
+  FuzzySearchService + ActivityFilterService + GeoCalculator + CategoryHelper working together
+  end-to-end against a realistic 13-activity dataset
+
+### Key findings
+- `"trail"` fuzzy-matches `"thai"` (Restaurant keyword) at similarity 0.6 — intentional engine behavior
+- `"food"` fuzzy-matches `"woods"` (Outdoors keyword) at similarity 0.6 — intentional engine behavior
+- Pre-existing failure: `LocationService_ManualOverrideTakesPriority_AndErrorClearsGpsState` (unrelated)
+
+### Result
+96/97 pass (1 pre-existing failure). Total Core test count raised from 4 → 70+ tests.
+
+
+
 ## 2026-04-13 — 401 audience error diagnostics + fix
 
 ### Problem

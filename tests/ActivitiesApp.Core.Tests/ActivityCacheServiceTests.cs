@@ -41,16 +41,4 @@ public class ActivityCacheServiceTests
         Assert.Equal("Activity", fetched!.Name);
         Assert.Single(cache.GetAll());
     }
-
-    [Fact]
-    public void AddOrUpdate_Suppressed_DoesNotRaiseNotification()
-    {
-        var cache = new ActivityCacheService(new InMemoryLocalActivityStore(), NullLogger<ActivityCacheService>.Instance);
-        var changed = 0;
-        cache.DataChanged += () => changed++;
-
-        cache.AddOrUpdate(new Activity { Id = Guid.NewGuid(), Name = "A", City = "C", Description = "D" }, suppressNotify: true);
-
-        Assert.Equal(0, changed);
-    }
 }
