@@ -45,6 +45,7 @@ public class ActivityFilterServiceTests
     {
         var activities = new List<Activity>
         {
+            Make("Free Park", "Outdoors", cost: 0),
             Make("Cheap Cafe", "Restaurant", cost: 10),
             Make("Mid Place",  "Restaurant", cost: 20),
             Make("Pricey Spa", "Wellness & Beauty", cost: 60),
@@ -53,8 +54,8 @@ public class ActivityFilterServiceTests
 
         var result = ActivityFilterService.ApplyDropdownFilters(activities, criteria).ToList();
 
-        Assert.Single(result);
-        Assert.Equal("Cheap Cafe", result[0].Name);
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Cheap Cafe", result[1].Name);
     }
 
     [Fact]
@@ -63,15 +64,17 @@ public class ActivityFilterServiceTests
         var activities = new List<Activity>
         {
             Make("Free Park",   "Outdoors",         cost: 0),
+            Make("Cheap Cafe",  "Restaurant",       cost: 15),
             Make("Mid Dinner",  "Restaurant",       cost: 30),
+            Make("Pricey Spa", "Wellness & Beauty", cost: 50),
             Make("Big Dinner",  "Restaurant",       cost: 55),
         };
         var criteria = new ActivityFilterCriteria { Cost = "$$" };
 
         var result = ActivityFilterService.ApplyDropdownFilters(activities, criteria).ToList();
 
-        Assert.Single(result);
-        Assert.Equal("Mid Dinner", result[0].Name);
+        Assert.Equal(3, result.Count);
+        Assert.Equal("Mid Dinner", result[1].Name);
     }
 
     [Fact]
@@ -80,6 +83,7 @@ public class ActivityFilterServiceTests
         var activities = new List<Activity>
         {
             Make("Cheap Bite",   "Fast Food",  cost: 8),
+            Make("Mid Dinner",   "Restaurant", cost: 50),
             Make("Fancy Dinner", "Restaurant", cost: 120),
         };
         var criteria = new ActivityFilterCriteria { Cost = "$$$" };
@@ -111,7 +115,12 @@ public class ActivityFilterServiceTests
     [Fact]
     public void ApplyDropdownFilters_Category_IsCaseInsensitive()
     {
-        var activities = new List<Activity> { Make("Trail Run", "Outdoors") };
+        var activities = new List<Activity> { 
+            Make("Trail Run", "Outdoors"), 
+            Make("Pizza Place","Restaurant"),
+            Make("Museum", "Arts & Culture"),
+            Make("Night Club", "Nightlife"),
+            };
         var criteria = new ActivityFilterCriteria { Category = "outdoors" };
 
         var result = ActivityFilterService.ApplyDropdownFilters(activities, criteria).ToList();
@@ -127,6 +136,8 @@ public class ActivityFilterServiceTests
         var activities = new List<Activity>
         {
             Make("Kids Zone",  "Attractions", minAge: 0,  maxAge: 12),
+            Make("Family Fun",  "Attractions", minAge: 0,  maxAge: 99),
+            Make("Soccer Game", "Fitness & Sports", minAge: 15,  maxAge: 20),
             Make("Adult Bar",  "Nightlife",   minAge: 21, maxAge: 99),
             Make("Teen Club",  "Fitness & Sports", minAge: 13, maxAge: 20),
         };
@@ -134,8 +145,8 @@ public class ActivityFilterServiceTests
 
         var result = ActivityFilterService.ApplyDropdownFilters(activities, criteria).ToList();
 
-        Assert.Single(result);
-        Assert.Equal("Teen Club", result[0].Name);
+        Assert.Equal(3, result.Count);
+        Assert.Equal("Family Fun", result[0].Name);
     }
 
     // ── ApplyDropdownFilters: location radius ──────────────────────────────

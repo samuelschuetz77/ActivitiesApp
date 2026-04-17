@@ -72,11 +72,8 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - name: Run API unit tests
-        run: dotnet test tests/ActivitiesApp.Api.Tests/ActivitiesApp.Api.Tests.csproj --configuration Release --verbosity normal
-
-      - name: Run Infrastructure unit tests
-        run: dotnet test tests/ActivitiesApp.Infrastructure.Tests/ActivitiesApp.Infrastructure.Tests.csproj --configuration Release --verbosity normal
+      - name: Run all unit tests
+        run: dotnet test --configuration Release --verbosity normal
 
   push-api:
     name: Push API Image

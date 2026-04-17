@@ -30,7 +30,7 @@ When working on any item below, after completing it:
 
 ## NOT STARTED
 
-- [ ] **Mobile App: Unit Tests for Non-Trivial Logic** (20 pts) — Need tests for ViewModels, services, page logic
+- [x] **Mobile App: Unit Tests for Non-Trivial Logic** (20 pts) — 70+ tests: helpers, filter service, fuzzy search, 7 integration tests in Core.Tests
 - [ ] **WriteUp: Work Log** (50 pts) — Excel spreadsheet: Date, Name, Goal, Start, Result, Stop, Elapsed
 - [ ] **WriteUp: PivotTable Summary** (20 pts) — Pivot by name, sum elapsed, with date/goal/result details
 - [ ] **WriteUp: User Test Round 1** (20 pts) — 3+ target users, multiple alternative designs, record feedback
