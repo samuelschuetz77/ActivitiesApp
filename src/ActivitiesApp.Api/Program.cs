@@ -93,16 +93,25 @@ using (var scope = app.Services.CreateScope())
     {
         var pgContext = scope.ServiceProvider.GetRequiredService<PostgresDbContext>();
 
-        // Seed from Cosmos -> Postgres only if Postgres is empty
-        var hasData = await pgContext.Activities.AnyAsync();
-        if (!hasData)
+        // Advisory lock prevents concurrent pods from racing on first-boot seed.
+        // Lock is automatically released when the connection closes.
+        await pgContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(42)");
+        try
         {
-            var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
-            await seedService.SeedAsync();
+            var hasData = await pgContext.Activities.AnyAsync();
+            if (!hasData)
+            {
+                var seedService = scope.ServiceProvider.GetRequiredService<CosmosSeedService>();
+                await seedService.SeedAsync();
+            }
+            else
+            {
+                startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            }
         }
-        else
+        finally
         {
-            startupLog.LogInformation("Postgres already has data — skipping Cosmos seed");
+            await pgContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(42)");
         }
     }
     else
