@@ -84,10 +84,35 @@ jobs:
       - name: Run all unit tests
         run: find tests -name "*.csproj" ! -name "*.IntegrationTests.csproj" | xargs -I {} dotnet test {} --configuration Release --verbosity minimal
 
+  integration-test:
+    name: Integration Test
+    if: github.event.action != 'closed'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'NuGet.Config', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Run integration tests
+        run: dotnet test tests/ActivitiesApp.IntegrationTests/ActivitiesApp.IntegrationTests.csproj --configuration Release --verbosity minimal
+
   push-api:
     name: Push API Image
     if: github.event.action != 'closed'
-    needs: [prepare, lint, test]
+    needs: [prepare, lint, test, integration-test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
