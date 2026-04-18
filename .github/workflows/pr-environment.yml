@@ -247,6 +247,7 @@ jobs:
 
       - name: Deploy Web
         run: |
+          sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-dp-keys-pvc.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-dep.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-svc.yaml | kubectl apply -f -
 

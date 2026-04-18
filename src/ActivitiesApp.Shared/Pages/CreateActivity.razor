@@ -124,18 +124,33 @@
     {
         <div class="alert alert-danger mt-3">@errorMessage</div>
     }
-
-    @if (!string.IsNullOrEmpty(successMessage))
-    {
-        <div class="alert alert-success mt-3">@successMessage</div>
-    }
 </div>
+
+@if (showSuccessModal)
+{
+    <div class="success-modal-overlay" @onclick="CloseSuccessModal">
+        <div class="success-modal" @onclick:stopPropagation="true">
+            <div class="success-modal-icon">✓</div>
+            <h3 class="success-modal-title">Activity Created!</h3>
+            <p class="success-modal-body">@successMessage</p>
+            <div class="success-modal-actions">
+                @if (createdActivityId.HasValue)
+                {
+                    <button class="btn btn-primary" @onclick="ViewCreatedActivity">View Activity</button>
+                }
+                <button class="btn btn-outline-secondary" @onclick="CloseSuccessModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private Activity newActivity { get; set; } = new Activity() { Activitytime = DateTime.UtcNow };
     private string? successMessage;
     private string? errorMessage;
     private bool isSubmitting;
+    private bool showSuccessModal;
+    private Guid? createdActivityId;
 
     // Address fields
     private string streetAddress = "";
@@ -258,7 +273,9 @@
             Logger.LogInformation(
                 "CreateActivity submit succeeded for ActivityId={ActivityId}, Name={Name}, City={City}",
                 created.Id, created.Name ?? "", created.City ?? "");
-            successMessage = $"Activity '{created.Name}' in '{created.City}' saved successfully!";
+            successMessage = $"'{created.Name}' in {created.City} has been saved!";
+            createdActivityId = created.Id;
+            showSuccessModal = true;
 
             // Reset form
             newActivity = new Activity() { Activitytime = DateTime.UtcNow };
@@ -294,6 +311,21 @@
             isSubmitting = false;
             StateHasChanged();
         }
+    }
+
+    private void CloseSuccessModal()
+    {
+        showSuccessModal = false;
+        successMessage = null;
+        createdActivityId = null;
+    }
+
+    private void ViewCreatedActivity()
+    {
+        var id = createdActivityId;
+        CloseSuccessModal();
+        if (id.HasValue)
+            Navigation.NavigateTo($"/activity/{id.Value}");
     }
 
     private void HandleInvalidSubmit(EditContext editContext)
