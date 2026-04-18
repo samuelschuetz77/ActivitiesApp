@@ -235,10 +235,14 @@ jobs:
             -e 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' \
             -e "s|IMAGE_PLACEHOLDER|${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}|g" \
             deploy/k8s/data/migrations-job.yaml | kubectl apply -f -
-          kubectl wait job/db-migrate \
+          if ! kubectl wait job/db-migrate \
             --namespace=${{ env.NAMESPACE }} \
             --for=condition=complete \
-            --timeout=120s
+            --timeout=120s; then
+            echo "=== Migration job failed — pod logs ==="
+            kubectl logs -n ${{ env.NAMESPACE }} -l job-name=db-migrate --tail=100 || true
+            exit 1
+          fi
 
       - name: Deploy API
         run: |
