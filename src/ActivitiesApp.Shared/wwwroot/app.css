@@ -466,6 +466,26 @@ h1:focus {
     border-color: #1b6ec2;
 }
 
+.radius-slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.radius-slider {
+    flex: 1;
+    cursor: pointer;
+    accent-color: #1b6ec2;
+}
+
+.radius-slider-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 3rem;
+    text-align: right;
+}
+
 /* Cards Carousel (horizontal scroll, e.g. Recently Viewed) */
 .cards-carousel {
     display: flex;
