@@ -38,6 +38,23 @@
                     }
                 </div>
 
+                @if (!string.IsNullOrEmpty(activity.CreatedByUserId))
+                {
+                    <div class="detail-creator">
+                        @if (!string.IsNullOrEmpty(activity.CreatedByProfilePictureUrl))
+                        {
+                            <img src="@activity.CreatedByProfilePictureUrl" alt="@activity.CreatedByDisplayName" class="creator-avatar" />
+                        }
+                        else
+                        {
+                            <div class="creator-avatar creator-avatar-fallback">
+                                @(string.IsNullOrWhiteSpace(activity.CreatedByDisplayName) ? "?" : activity.CreatedByDisplayName[0].ToString().ToUpper())
+                            </div>
+                        }
+                        <span class="creator-name">@(activity.CreatedByDisplayName ?? "Community Member")</span>
+                    </div>
+                }
+
                 <div class="detail-rating">
                     @for (int i = 1; i <= 5; i++)
                     {

@@ -703,6 +703,36 @@ h1:focus {
     text-transform: uppercase;
 }
 
+.detail-creator {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.creator-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.creator-avatar-fallback {
+    background: var(--color-primary, #6c757d);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.creator-name {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary, #6c757d);
+    font-weight: 500;
+}
+
 .detail-rating {
     display: flex;
     align-items: center;
