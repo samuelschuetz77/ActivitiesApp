@@ -31,6 +31,12 @@ spec:
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "activitiesapp", "-d", "activitiesdb"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 10
           resources:
             requests:
               memory: "256Mi"

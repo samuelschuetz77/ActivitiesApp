@@ -235,21 +235,27 @@ jobs:
             -e 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' \
             -e "s|IMAGE_PLACEHOLDER|${{ env.API_IMAGE }}:pr-${{ env.PR_NUMBER }}-${{ env.SHA_TAG }}|g" \
             deploy/k8s/data/migrations-job.yaml | kubectl apply -f -
-          kubectl wait job/db-migrate \
+          if ! kubectl wait job/db-migrate \
             --namespace=${{ env.NAMESPACE }} \
             --for=condition=complete \
-            --timeout=120s
+            --timeout=120s; then
+            echo "=== Migration job failed — pod logs ==="
+            kubectl logs -n ${{ env.NAMESPACE }} -l job-name=db-migrate --tail=100 || true
+            exit 1
+          fi
 
       - name: Deploy API
         run: |
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/api-dep.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/api-svc.yaml | kubectl apply -f -
+          kubectl set env deployment/activitiesapp-api DOTNET_USE_POLLING_FILE_WATCHER=true --namespace=${{ env.NAMESPACE }}
 
       - name: Deploy Web
         run: |
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-dp-keys-pvc.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-dep.yaml | kubectl apply -f -
           sed 's/namespace: activitiesapp/namespace: ${{ env.NAMESPACE }}/g' deploy/k8s/app/web-svc.yaml | kubectl apply -f -
+          kubectl set env deployment/activitiesapp-web DOTNET_USE_POLLING_FILE_WATCHER=true --namespace=${{ env.NAMESPACE }}
 
       - name: Create PR ingress
         run: |
