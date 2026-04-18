@@ -18,6 +18,12 @@ public class ActivityGrpcClient : IActivityService
 
     // ─── Activity CRUD ───
 
+    public Task<Activity> UpdateActivityAsync(Activity activity) =>
+        Task.FromException<Activity>(new NotSupportedException("Editing activities is not supported over gRPC."));
+
+    public Task DeleteActivityAsync(Guid id) =>
+        Task.FromException(new NotSupportedException("Deleting activities is not supported over gRPC."));
+
     public async Task<Activity> CreateActivityAsync(Activity activity)
     {
         var request = new CreateActivityRequest
