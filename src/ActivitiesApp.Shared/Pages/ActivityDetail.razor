@@ -48,7 +48,7 @@
                         else
                         {
                             <div class="creator-avatar creator-avatar-fallback">
-                                @((activity.CreatedByDisplayName ?? "?").Substring(0, 1).ToUpper())
+                                @(string.IsNullOrWhiteSpace(activity.CreatedByDisplayName) ? "?" : activity.CreatedByDisplayName[0].ToString().ToUpper())
                             </div>
                         }
                         <span class="creator-name">@(activity.CreatedByDisplayName ?? "Community Member")</span>
