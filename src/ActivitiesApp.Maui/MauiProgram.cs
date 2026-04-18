@@ -49,9 +49,12 @@ public static class MauiProgram
         // gRPC client (still used by SyncService for delta sync)
         builder.Services.AddSingleton(sp =>
         {
+            var tokenProvider = sp.GetRequiredService<IAccessTokenProvider>();
+            var authHandler = new AuthHeaderHandler(tokenProvider);
+            authHandler.InnerHandler = new SocketsHttpHandler();
             var channel = GrpcChannel.ForAddress(apiAddress, new GrpcChannelOptions
             {
-                HttpHandler = new SocketsHttpHandler()
+                HttpHandler = authHandler
             });
             return new ActivityService.ActivityServiceClient(channel);
         });

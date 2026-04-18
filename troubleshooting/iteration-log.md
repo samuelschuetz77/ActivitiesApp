@@ -1,5 +1,18 @@
 # Iteration Log
 
+## 2026-04-18 — gRPC sync client missing auth header
+
+### Problem
+New activities created in the MAUI app were saved to local SQLite with `SyncState.PendingCreate` but never pushed to Cosmos DB.
+
+### Root Cause
+`MauiProgram.cs` wired the gRPC `ActivityServiceClient` channel with a bare `SocketsHttpHandler` — no auth token. The REST `HttpClient` correctly used `AuthHeaderHandler`, but the gRPC client (used by `SyncService.PushChangesAsync`) did not. Every `PushChanges` call was unauthenticated and rejected by the API.
+
+### Fix
+`src/ActivitiesApp.Maui/MauiProgram.cs` — gRPC channel now wraps `AuthHeaderHandler` around `SocketsHttpHandler` so the bearer token is attached to sync calls, matching the REST client setup.
+
+
+
 ## 2026-04-17 — Core unit + integration tests
 
 ### What was added
