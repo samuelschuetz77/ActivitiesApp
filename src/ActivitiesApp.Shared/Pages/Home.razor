@@ -17,6 +17,7 @@
     <!-- Location Row -->
     <div class="home-location-row">
         <h1 class="home-title">Discover</h1>
+        <button class="help-btn" @onclick="() => _showHelp = true" title="Help">?</button>
         <div class="location-icon-wrapper">
             <button class="location-btn @(hasActiveLocation ? "active" : "")" @onclick="ToggleLocationPopup" title="Your location">
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -271,6 +272,34 @@
     }
 </div>
 
+@if (_showHelp)
+{
+    <div class="help-overlay" @onclick="() => _showHelp = false">
+        <div class="help-modal" @onclick:stopPropagation>
+            <button class="help-modal-close" @onclick="() => _showHelp = false">&times;</button>
+            <h2>Welcome to Activor!</h2>
+            <p>Activor helps you discover and share activities near you. Here's how to get started:</p>
+
+            <h4>Discover</h4>
+            <p>Browse activities by category using the tag chips, or search by name using the search bar. Activities near your location are shown first.</p>
+
+            <h4>Location</h4>
+            <p>Tap the <strong>pin icon</strong> in the top right to set your location. You can use GPS or enter a zip code. Your distance to each activity updates automatically.</p>
+
+            <h4>Activity Details</h4>
+            <p>Tap any activity card to see full details — description, location, cost, age range, and more. User-created activities show the creator's name and photo.</p>
+
+            <h4>Create an Activity</h4>
+            <p>Signed in? Use the <strong>Create</strong> tab to post your own activity. You can set the name, location, date, category, and upload photos.</p>
+
+            <h4>Your Profile</h4>
+            <p>The <strong>Profile</strong> tab shows your account info and the activities you've created. Tap any of them to view, edit, or delete.</p>
+
+            <button class="btn btn-primary mt-3 w-100" @onclick="() => _showHelp = false">Got it!</button>
+        </div>
+    </div>
+}
+
 @code {
     // Tag card definitions — canonical list lives in CategoryHelper.TagCards
     private string searchText = "";
@@ -302,6 +331,8 @@
     private string? quotaWarningMessage;
     private string quotaWarningLevel = "warning"; // "warning" or "critical"
     private bool quotaBannerDismissed;
+
+    private bool _showHelp;
 
     // Location popup
     private bool showLocationPopup;
