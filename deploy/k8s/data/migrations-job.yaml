@@ -14,6 +14,8 @@ spec:
           image: IMAGE_PLACEHOLDER
           command: ["dotnet", "ActivitiesApp.Api.dll", "--migrate-only"]
           env:
+            - name: DOTNET_USE_POLLING_FILE_WATCHER
+              value: "true"
             - name: DATABASE_PROVIDER
               value: Postgres
             - name: POSTGRES_HOST
