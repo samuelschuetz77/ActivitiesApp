@@ -1,5 +1,20 @@
 # Iteration Log
 
+## 2026-04-18 — OnDataChanged infinite loop + unhandled error on navigation
+
+### Problem
+Two related symptoms:
+1. Clicking a newly created activity showed "An unhandled error has occurred" (Blazor error banner)
+2. Log showed the same SQLite `SELECT … WHERE Id = @p` query firing dozens of times
+
+### Root Cause
+`Home.razor.OnDataChanged` is `async void` and called `ActivityService.ListActivitiesAsync()` inside it. `ListActivitiesAsync` starts a background HTTP refresh which, on completion, fires `DataChanged` again, re-entering `OnDataChanged` — an infinite loop. Each loop iteration saved all server activities to SQLite (one `FindAsync` per row = many repeated queries).
+
+The unhandled error was a second consequence: if the user navigated from Home to ActivityDetail while `OnDataChanged` was mid-await, Blazor disposed Home. The in-flight `InvokeAsync` then threw `ObjectDisposedException` which propagated up the `async void` as an unhandled exception, triggering the error banner.
+
+### Fix
+`src/ActivitiesApp.Shared/Pages/Home.razor` — added `_handlingDataChange` re-entrancy guard (early-return if already handling a change) and wrapped the `async void` body in `try/catch (ObjectDisposedException)` + `finally { _handlingDataChange = false; }`.
+
 ## 2026-04-18 — gRPC sync client missing auth header
 
 ### Problem

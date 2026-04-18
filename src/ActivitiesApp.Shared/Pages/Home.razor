@@ -305,6 +305,7 @@
     private string searchText = "";
     private List<Activity>? allActivities;
     private List<ScoredActivity>? searchResults;
+    private bool _handlingDataChange;
     private const int HomeDiscoverRadiusMiles = 10;
     private const double MetersPerMile = 1609.34;
 
@@ -437,55 +438,65 @@
 
     private async void OnDataChanged()
     {
+        if (_handlingDataChange) return;
+        _handlingDataChange = true;
+
         dataChangedCount++;
-
-        await InvokeAsync(async () =>
+        try
         {
-            await LoadRecentlyViewed();
-            try { allActivities = await ActivityService.ListActivitiesAsync(); }
-            catch (Exception ex) { Logger.LogWarning(ex, "Failed to refresh all activities for search"); }
-
-            // Check if any cached tags returned empty results. This happens on MAUI after
-            // a location change: DiscoverActivitiesAsync returns empty from stale local cache,
-            // then background refresh brings real data and fires DataChanged. We retry those
-            // empty tags (up to 10 times total) so they pick up the fresh data.
-            var emptyTags = cachedActivitiesByTag
-                .Where(kvp => kvp.Value.Count == 0)
-                .Select(kvp => kvp.Key)
-                .ToList();
-
-            if (emptyTags.Count > 0 && _emptyTagRetryCount < 10)
+            await InvokeAsync(async () =>
             {
-                _emptyTagRetryCount++;
-                Logger.LogInformation(
-                    "Home OnDataChanged: retry #{Retry}, {EmptyCount} empty tags [{Tags}], selectedTag={SelectedTag}",
-                    _emptyTagRetryCount, emptyTags.Count, string.Join(", ", emptyTags), selectedTag ?? "<none>");
+                await LoadRecentlyViewed();
+                try { allActivities = await ActivityService.ListActivitiesAsync(); }
+                catch (Exception ex) { Logger.LogWarning(ex, "Failed to refresh all activities for search"); }
 
-                // Remove empty tags from cache so they get re-fetched
-                foreach (var tag in emptyTags)
+                // Check if any cached tags returned empty results. This happens on MAUI after
+                // a location change: DiscoverActivitiesAsync returns empty from stale local cache,
+                // then background refresh brings real data and fires DataChanged. We retry those
+                // empty tags (up to 10 times total) so they pick up the fresh data.
+                var emptyTags = cachedActivitiesByTag
+                    .Where(kvp => kvp.Value.Count == 0)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                if (emptyTags.Count > 0 && _emptyTagRetryCount < 10)
                 {
-                    cachedActivitiesByTag.Remove(tag);
+                    _emptyTagRetryCount++;
+                    Logger.LogInformation(
+                        "Home OnDataChanged: retry #{Retry}, {EmptyCount} empty tags [{Tags}], selectedTag={SelectedTag}",
+                        _emptyTagRetryCount, emptyTags.Count, string.Join(", ", emptyTags), selectedTag ?? "<none>");
+
+                    // Remove empty tags from cache so they get re-fetched
+                    foreach (var tag in emptyTags)
+                    {
+                        cachedActivitiesByTag.Remove(tag);
+                    }
+
+                    // Re-fetch the selected tag immediately so the user sees results
+                    if (selectedTag != null && emptyTags.Contains(selectedTag))
+                    {
+                        await EnsureTagLoadedAsync(selectedTag, "data_changed_retry_empty", isUserInitiated: false);
+                    }
+                }
+                else if (emptyTags.Count > 0)
+                {
+                    Logger.LogWarning(
+                        "Home OnDataChanged: {EmptyCount} empty tags but retry limit reached ({Retry}), tags=[{Tags}]",
+                        emptyTags.Count, _emptyTagRetryCount, string.Join(", ", emptyTags));
+                }
+                else
+                {
+                    Logger.LogDebug("Home OnDataChanged: count={Count}, no empty tags, refreshing recently viewed only", dataChangedCount);
                 }
 
-                // Re-fetch the selected tag immediately so the user sees results
-                if (selectedTag != null && emptyTags.Contains(selectedTag))
-                {
-                    await EnsureTagLoadedAsync(selectedTag, "data_changed_retry_empty", isUserInitiated: false);
-                }
-            }
-            else if (emptyTags.Count > 0)
-            {
-                Logger.LogWarning(
-                    "Home OnDataChanged: {EmptyCount} empty tags but retry limit reached ({Retry}), tags=[{Tags}]",
-                    emptyTags.Count, _emptyTagRetryCount, string.Join(", ", emptyTags));
-            }
-            else
-            {
-                Logger.LogDebug("Home OnDataChanged: count={Count}, no empty tags, refreshing recently viewed only", dataChangedCount);
-            }
-
-            StateHasChanged();
-        });
+                StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            _handlingDataChange = false;
+        }
     }
 
     private async Task LoadRecentlyViewed()
