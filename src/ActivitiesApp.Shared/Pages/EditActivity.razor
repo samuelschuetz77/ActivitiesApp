@@ -1,0 +1,158 @@
+@page "/activity/{Id:guid}/edit"
+@using ActivitiesApp.Shared.Services
+@using ActivitiesApp.Shared.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject IActivityService ActivityService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Activity</PageTitle>
+
+<div class="create-activity-page">
+    <h2>Edit Activity</h2>
+
+    @if (_loading)
+    {
+        <p>Loading...</p>
+    }
+    else if (_activity is null)
+    {
+        <p class="text-danger">Activity not found.</p>
+    }
+    else
+    {
+        <EditForm Model="@_activity" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label>Name:</label>
+                <InputText @bind-Value="_activity.Name" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label>Description:</label>
+                <InputTextArea @bind-Value="_activity.Description" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label>Cost:</label>
+                <InputNumber @bind-Value="_activity.Cost" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label>Activity Time:</label>
+                <InputDate @bind-Value="_activity.Activitytime" Type="InputDateType.DateTimeLocal" class="form-control" />
+            </div>
+
+            <div class="mb-3 row">
+                <div class="col">
+                    <label>City:</label>
+                    <InputText @bind-Value="_activity.City" class="form-control" />
+                </div>
+                <div class="col-3">
+                    <label>State:</label>
+                    <InputText @bind-Value="_stateField" class="form-control" placeholder="TX" maxlength="2" />
+                </div>
+                <div class="col-3">
+                    <label>ZIP Code:</label>
+                    <InputText @bind-Value="_zipCode" class="form-control" placeholder="75001" maxlength="5" />
+                </div>
+            </div>
+
+            <div class="mb-3 row">
+                <div class="col">
+                    <label>Min Age:</label>
+                    <InputNumber @bind-Value="_activity.MinAge" class="form-control" />
+                </div>
+                <div class="col">
+                    <label>Max Age:</label>
+                    <InputNumber @bind-Value="_activity.MaxAge" class="form-control" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label>Category:</label>
+                <InputSelect @bind-Value="_activity.Category" class="form-control">
+                    <option value="">Select a category</option>
+                    <option value="Restaurant">Restaurant</option>
+                    <option value="Fast Food">Fast Food</option>
+                    <option value="Convenience Store">Convenience Store</option>
+                    <option value="Attractions">Attractions</option>
+                    <option value="Outdoors">Outdoors</option>
+                    <option value="Arts & Culture">Arts &amp; Culture</option>
+                    <option value="Nightlife">Nightlife</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Fitness & Sports">Fitness &amp; Sports</option>
+                    <option value="Wellness & Beauty">Wellness &amp; Beauty</option>
+                    <option value="Education">Education</option>
+                </InputSelect>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save Changes")
+                </button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger mt-3">@_error</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Activity? _activity;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string _stateField = "";
+    private string _zipCode = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _activity = await ActivityService.GetActivityAsync(Id);
+        _loading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (_activity is null) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            // Re-geocode if city changed
+            if (!string.IsNullOrWhiteSpace(_activity.City))
+            {
+                var addressParts = new[] { _activity.City, _stateField, _zipCode }
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
+                var address = string.Join(", ", addressParts);
+                var geo = await ActivityService.GeocodeAddressAsync(address);
+                if (geo is not null)
+                {
+                    _activity.Latitude = geo.Latitude;
+                    _activity.Longitude = geo.Longitude;
+                }
+            }
+
+            await ActivityService.UpdateActivityAsync(_activity);
+            Navigation.NavigateTo($"/activity/{Id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo($"/activity/{Id}");
+}

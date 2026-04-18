@@ -303,6 +303,47 @@ app.MapPost("/api/activities", async (ActivitiesApp.Infrastructure.Models.Activi
     }
 }).RequireAuthorization();
 
+app.MapPut("/api/activities/{id:guid}", async (Guid id, ActivitiesApp.Infrastructure.Models.Activity activity, IActivityDbContext db, HttpContext httpContext) =>
+{
+    var oid = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+           ?? httpContext.User.FindFirstValue("oid");
+
+    var existing = await db.Activities.FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    if (existing is null) return Results.NotFound();
+    if (existing.CreatedByUserId != oid) return Results.Forbid();
+
+    existing.Name = activity.Name;
+    existing.Description = activity.Description;
+    existing.Cost = activity.Cost;
+    existing.Activitytime = activity.Activitytime;
+    existing.City = activity.City;
+    existing.Latitude = activity.Latitude;
+    existing.Longitude = activity.Longitude;
+    existing.MinAge = activity.MinAge;
+    existing.MaxAge = activity.MaxAge;
+    existing.Category = activity.Category;
+    existing.ImageUrl = activity.ImageUrl;
+    existing.UpdatedAt = DateTimeOffset.UtcNow;
+
+    await db.SaveChangesAsync();
+    return Results.Ok(existing);
+}).RequireAuthorization();
+
+app.MapDelete("/api/activities/{id:guid}", async (Guid id, IActivityDbContext db, HttpContext httpContext) =>
+{
+    var oid = httpContext.User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+           ?? httpContext.User.FindFirstValue("oid");
+
+    var existing = await db.Activities.FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    if (existing is null) return Results.NotFound();
+    if (existing.CreatedByUserId != oid) return Results.Forbid();
+
+    existing.IsDeleted = true;
+    existing.UpdatedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/discover", async (double lat, double lng, int? radiusMeters, string? tagName,
     IActivityDbContext db, GooglePlacesService places, IMemoryCache discoverCache, ILogger<Program> log) =>
 {

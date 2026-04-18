@@ -7,6 +7,8 @@ public interface IActivityService
     event Action? DataChanged;
 
     Task<Activity> CreateActivityAsync(Activity activity);
+    Task<Activity> UpdateActivityAsync(Activity activity);
+    Task DeleteActivityAsync(Guid id);
     Task<Activity?> GetActivityAsync(Guid id);
     Task<List<Activity>> ListActivitiesAsync();
     Task<List<Activity>> DiscoverActivitiesAsync(double lat, double lng, int radiusMeters, string? tagName = null);
