@@ -650,6 +650,26 @@ h1:focus {
     color: #1b6ec2;
 }
 
+.detail-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.owner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.delete-confirm {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+}
+
 .detail-card {
     background: #fff;
     border-radius: 16px;

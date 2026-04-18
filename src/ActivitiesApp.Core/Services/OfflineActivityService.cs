@@ -53,6 +53,12 @@ public class OfflineActivityService : IActivityService
         return result;
     }
 
+    public Task<Activity> UpdateActivityAsync(Activity activity) =>
+        Task.FromException<Activity>(new NotSupportedException("Editing activities is not available offline."));
+
+    public Task DeleteActivityAsync(Guid id) =>
+        Task.FromException(new NotSupportedException("Deleting activities is not available offline."));
+
     public Task<Activity?> GetActivityAsync(Guid id)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();

@@ -114,6 +114,48 @@ public class ActivityRestClient : IActivityService
         throw new CreateActivityException(message);
     }
 
+    public async Task<Activity> UpdateActivityAsync(Activity activity)
+    {
+        var token = await AcquireTokenAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/activities/{activity.Id}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(activity);
+        var response = await _http.SendAsync(request);
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<Activity>())!;
+        var body = await response.Content.ReadAsStringAsync();
+        throw new InvalidOperationException($"Update failed ({(int)response.StatusCode}): {Truncate(body, 200)}");
+    }
+
+    public async Task DeleteActivityAsync(Guid id)
+    {
+        var token = await AcquireTokenAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/activities/{id}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Delete failed ({(int)response.StatusCode}): {Truncate(body, 200)}");
+        }
+    }
+
+    private async Task<string> AcquireTokenAsync()
+    {
+        try
+        {
+            var token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope]);
+            if (TokenHasWrongAudience(token))
+                token = await _tokenAcquisition.GetAccessTokenForUserAsync([ApiScope],
+                    tokenAcquisitionOptions: new TokenAcquisitionOptions { ForceRefresh = true });
+            return token;
+        }
+        catch (MicrosoftIdentityWebChallengeUserException ex)
+        {
+            throw new InvalidOperationException("Your session has expired. Please sign out and sign back in.", ex);
+        }
+    }
+
     private void LogTokenDiagnostics(string token, string phase)
     {
         try
