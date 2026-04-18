@@ -113,10 +113,20 @@
     private string? _error;
     private string _stateField = "";
     private string _zipCode = "";
+    private string _originalCity = "";
+    private string _originalState = "";
+    private string _originalZip = "";
 
     protected override async Task OnInitializedAsync()
     {
         _activity = await ActivityService.GetActivityAsync(Id);
+        if (_activity is not null)
+        {
+            _originalCity = _activity.City ?? "";
+            // State and zip aren't stored on the model; track the empty baseline
+            _originalState = "";
+            _originalZip = "";
+        }
         _loading = false;
     }
 
@@ -127,13 +137,15 @@
         _error = null;
         try
         {
-            // Re-geocode if city changed
-            if (!string.IsNullOrWhiteSpace(_activity.City))
+            var cityChanged = (_activity.City ?? "") != _originalCity;
+            var stateChanged = _stateField != _originalState;
+            var zipChanged = _zipCode != _originalZip;
+
+            if ((cityChanged || stateChanged || zipChanged) && !string.IsNullOrWhiteSpace(_activity.City))
             {
                 var addressParts = new[] { _activity.City, _stateField, _zipCode }
                     .Where(s => !string.IsNullOrWhiteSpace(s));
-                var address = string.Join(", ", addressParts);
-                var geo = await ActivityService.GeocodeAddressAsync(address);
+                var geo = await ActivityService.GeocodeAddressAsync(string.Join(", ", addressParts));
                 if (geo is not null)
                 {
                     _activity.Latitude = geo.Latitude;
