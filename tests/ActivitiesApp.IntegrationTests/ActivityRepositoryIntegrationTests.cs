@@ -19,7 +19,7 @@ public class ActivityRepositoryIntegrationTests(PostgresContainerFixture fixture
             Category = "Outdoors",
             Cost = 15.0,
             MinAge = 10,
-            MaxAge = 11, //change back to 50 after failed test 
+            MaxAge = 50, //change back to 50 after failed test 
             Latitude = 39.74,
             Longitude = -104.99,
             Rating = 4.5,
