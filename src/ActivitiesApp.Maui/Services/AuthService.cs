@@ -15,6 +15,7 @@ public class AuthService : IAccessTokenProvider
     public bool IsSignedIn => _authResult != null;
     public string UserEmail => _authResult?.Account?.Username ?? "";
     public string UserName => _authResult?.ClaimsPrincipal?.FindFirst("name")?.Value ?? UserEmail;
+    public System.Security.Claims.ClaimsPrincipal? Principal => _authResult?.ClaimsPrincipal;
 
     public AuthService()
     {
