@@ -12,6 +12,8 @@ public class AuthService : IAccessTokenProvider
     private readonly IPublicClientApplication _pca;
     private AuthenticationResult? _authResult;
 
+    public event Action? AuthenticationStateChanged;
+
     public bool IsSignedIn => _authResult != null;
     public string UserEmail => _authResult?.Account?.Username ?? "";
     public string UserName => _authResult?.ClaimsPrincipal?.FindFirst("name")?.Value ?? UserEmail;
@@ -45,6 +47,7 @@ public class AuthService : IAccessTokenProvider
 #endif
 
             _authResult = await interactiveRequest.ExecuteAsync();
+            AuthenticationStateChanged?.Invoke();
             return true;
         }
         catch (MsalClientException ex) when (ex.ErrorCode == "authentication_canceled")
@@ -61,6 +64,7 @@ public class AuthService : IAccessTokenProvider
             await _pca.RemoveAsync(account);
         }
         _authResult = null;
+        AuthenticationStateChanged?.Invoke();
     }
 
     public async Task<string?> GetTokenAsync()

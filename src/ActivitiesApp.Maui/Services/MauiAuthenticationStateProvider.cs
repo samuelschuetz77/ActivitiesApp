@@ -10,14 +10,13 @@ public class MauiAuthenticationStateProvider : AuthenticationStateProvider
     public MauiAuthenticationStateProvider(AuthService authService)
     {
         _authService = authService;
+        _authService.AuthenticationStateChanged += () =>
+            NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
 
     public override Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var principal = _authService.IsSignedIn && _authService.Principal != null
-            ? _authService.Principal
-            : new ClaimsPrincipal(new ClaimsIdentity());
-
+        var principal = _authService.Principal ?? new ClaimsPrincipal(new ClaimsIdentity());
         return Task.FromResult(new AuthenticationState(principal));
     }
 }

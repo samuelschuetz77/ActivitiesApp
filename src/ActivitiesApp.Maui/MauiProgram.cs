@@ -34,6 +34,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IAccessTokenProvider>(sp => sp.GetRequiredService<AuthService>());
         builder.Services.AddSingleton<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, MauiAuthenticationStateProvider>();
+        builder.Services.AddAuthorizationCore();
 
         var apiAddress = builder.Configuration["ApiAddress"] ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net";
 
