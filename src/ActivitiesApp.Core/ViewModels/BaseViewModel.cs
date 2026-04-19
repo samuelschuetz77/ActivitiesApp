@@ -5,8 +5,8 @@ namespace ActivitiesApp.ViewModels;
 public partial class BaseViewModel : ObservableObject
 {
     [ObservableProperty]
-    public partial string Title { get; set; } = string.Empty;
+    private string _title = string.Empty;
 
     [ObservableProperty]
-    public partial bool IsBusy { get; set; }
+    private bool _isBusy;
 }

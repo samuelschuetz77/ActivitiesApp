@@ -83,11 +83,11 @@ public static class MauiProgram
         builder.Services.AddScoped<IActivityService, OfflineActivityService>();
 
         // ViewModels
+        builder.Services.AddTransient<IUserProfileService, UserProfileService>();
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<ActivitiesViewModel>();
         builder.Services.AddTransient<CreateViewModel>();
-        builder.Services.AddTransient<ProfileViewModel>(sp =>
-            new ProfileViewModel(sp.GetRequiredService<AuthService>(), sp.GetRequiredService<HttpClient>()));
+        builder.Services.AddTransient<ProfileViewModel>();
 
         // Pages
         builder.Services.AddTransient<HomePage>();

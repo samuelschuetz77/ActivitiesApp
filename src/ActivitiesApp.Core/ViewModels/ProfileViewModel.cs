@@ -1,16 +1,13 @@
-using ActivitiesApp.Services;
 using ActivitiesApp.Shared.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
-using System.Net.Http.Json;
 
 namespace ActivitiesApp.ViewModels;
 
 public partial class ProfileViewModel : BaseViewModel
 {
-    private readonly AuthService _authService;
-    private readonly HttpClient _http;
+    private readonly IUserProfileService _profileService;
 
     [ObservableProperty] private string? _profilePictureUrl;
     [ObservableProperty] private string? _saveStatusMessage;
@@ -22,18 +19,17 @@ public partial class ProfileViewModel : BaseViewModel
 
     public ObservableCollection<Activity> MyActivities { get; } = [];
 
-    public ProfileViewModel(AuthService authService, HttpClient http)
+    public ProfileViewModel(IUserProfileService profileService)
     {
         Title = "Profile";
-        _authService = authService;
-        _http = http;
+        _profileService = profileService;
     }
 
     public async Task LoadAsync()
     {
         try
         {
-            var me = await _http.GetFromJsonAsync<UserProfile>("/api/auth/me");
+            var me = await _profileService.GetMeAsync();
             ProfilePictureUrl = me?.ProfilePictureUrl;
         }
         catch { /* not signed in or offline */ }
@@ -52,8 +48,8 @@ public partial class ProfileViewModel : BaseViewModel
         SaveStatusMessage = null;
         try
         {
-            var response = await _http.PutAsJsonAsync("/api/auth/me/settings", new { profilePictureUrl = _pendingPhotoDataUrl });
-            if (response.IsSuccessStatusCode)
+            var result = await _profileService.SaveSettingsAsync(_pendingPhotoDataUrl);
+            if (result is not null)
             {
                 ProfilePictureUrl = _pendingPhotoDataUrl;
                 _pendingPhotoDataUrl = null;
@@ -84,12 +80,11 @@ public partial class ProfileViewModel : BaseViewModel
     {
         try
         {
-            var activities = await _http.GetFromJsonAsync<List<Activity>>("/api/auth/my-activities") ?? [];
+            var activities = await _profileService.GetMyActivitiesAsync();
             MyActivities.Clear();
             foreach (var a in activities)
                 MyActivities.Add(a);
         }
         catch { /* offline */ }
     }
-
 }

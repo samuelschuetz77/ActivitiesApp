@@ -71,7 +71,8 @@
       "Bash(kubectl get *)",
       "Bash(wsl *)",
       "Bash(cmd *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "mcp__claude_ai_Google_Drive__read_file_content"
     ]
   }
 }
