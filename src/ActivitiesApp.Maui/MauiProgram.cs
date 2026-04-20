@@ -33,6 +33,8 @@ public static class MauiProgram
         // MSAL auth service
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IAccessTokenProvider>(sp => sp.GetRequiredService<AuthService>());
+        builder.Services.AddSingleton<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, MauiAuthenticationStateProvider>();
+        builder.Services.AddAuthorizationCore();
 
         var apiAddress = builder.Configuration["ApiAddress"] ?? "https://activities-api-g8adhabhb6eqbfd2.eastus-01.azurewebsites.net";
 
@@ -81,11 +83,11 @@ public static class MauiProgram
         builder.Services.AddScoped<IActivityService, OfflineActivityService>();
 
         // ViewModels
+        builder.Services.AddTransient<IUserProfileService, UserProfileService>();
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<ActivitiesViewModel>();
         builder.Services.AddTransient<CreateViewModel>();
-        builder.Services.AddTransient<ProfileViewModel>(sp =>
-            new ProfileViewModel(sp.GetRequiredService<AuthService>(), sp.GetRequiredService<HttpClient>()));
+        builder.Services.AddTransient<ProfileViewModel>();
 
         // Pages
         builder.Services.AddTransient<HomePage>();

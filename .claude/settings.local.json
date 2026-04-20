@@ -74,7 +74,8 @@
       "Bash(powershell *)",
       "Bash(tailscale status *)",
       "Bash(nc -zv 10.43.132.244 5432)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "mcp__claude_ai_Google_Drive__read_file_content"
     ]
   }
 }
