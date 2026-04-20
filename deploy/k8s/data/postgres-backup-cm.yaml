@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-script-config
+  namespace: activitiesapp
+data:
+  backup.sh: |
+    #!/bin/sh
+    set -e
+
+    FILENAME="backup-$(date +%F-%H%M%S).sql"
+
+    echo "Starting pg_dump..."
+    pg_dump -h "$PG_HOST" -U "$PG_USER" "$PG_DATABASE" > /tmp/"$FILENAME"
+
+    echo "Uploading to Azure Blob..."
+    curl -s -f -X PUT \
+      -H "x-ms-blob-type: BlockBlob" \
+      -H "x-ms-date: $(date -u '+%a, %d %b %Y %T GMT')" \
+      -H "Content-Type: application/octet-stream" \
+      --data-binary @/tmp/"$FILENAME" \
+      "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${STORAGE_CONTAINER}/${FILENAME}?${SAS_TOKEN}"
+
+    echo "Backup complete: $FILENAME"
+    rm /tmp/"$FILENAME"

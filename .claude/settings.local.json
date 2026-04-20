@@ -71,7 +71,10 @@
       "Bash(kubectl get *)",
       "Bash(wsl *)",
       "Bash(cmd *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(tailscale status *)",
+      "Bash(nc -zv 10.43.132.244 5432)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

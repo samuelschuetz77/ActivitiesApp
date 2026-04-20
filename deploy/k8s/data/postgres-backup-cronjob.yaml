@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: activitiesapp
+spec:
+  schedule: "30 22 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup-worker
+              image: postgres:16.4
+              command: ["/bin/sh", "/scripts/backup.sh"]
+              env:
+                - name: PG_HOST
+                  value: "postgres"
+                - name: PG_USER
+                  value: "activitiesapp"
+                - name: PG_DATABASE
+                  value: "activitiesdb"
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: POSTGRES_PASSWORD
+                - name: STORAGE_ACCOUNT
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-secrets
+                      key: STORAGE_ACCOUNT
+                - name: STORAGE_CONTAINER
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-secrets
+                      key: STORAGE_CONTAINER
+                - name: SAS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-secrets
+                      key: SAS_TOKEN
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
+              volumeMounts:
+                - name: script-vol
+                  mountPath: /scripts
+          volumes:
+            - name: script-vol
+              configMap:
+                name: backup-script-config
