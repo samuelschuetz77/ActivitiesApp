@@ -4,7 +4,7 @@ metadata:
   name: postgres-backup
   namespace: activitiesapp
 spec:
-  schedule: "30 22 * * *"
+  schedule: "0 9 * * *"
   jobTemplate:
     spec:
       template:
