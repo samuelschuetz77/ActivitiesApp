@@ -8,6 +8,8 @@ data:
     #!/bin/sh
     set -e
 
+    apt-get update -qq && apt-get install -y curl -qq
+
     FILENAME="backup-$(date +%F-%H%M%S).sql"
 
     echo "Starting pg_dump..."
