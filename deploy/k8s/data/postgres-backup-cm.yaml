@@ -16,7 +16,7 @@ data:
     pg_dump -h "$PG_HOST" -U "$PG_USER" "$PG_DATABASE" > /tmp/"$FILENAME"
 
     echo "Uploading to Azure Blob..."
-    curl -s -f -X PUT \
+    curl -v -X PUT \
       -H "x-ms-blob-type: BlockBlob" \
       -H "x-ms-date: $(date -u '+%a, %d %b %Y %T GMT')" \
       -H "Content-Type: application/octet-stream" \
