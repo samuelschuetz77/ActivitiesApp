@@ -25,3 +25,16 @@ data:
 
     echo "Backup complete: $FILENAME"
     rm /tmp/"$FILENAME"
+
+    echo "Pruning old backups (keep 4)..."
+    BLOBS=$(curl -s "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${STORAGE_CONTAINER}?restype=container&comp=list&${SAS_TOKEN}" \
+      | grep -o '<Name>[^<]*</Name>' | sed 's/<[^>]*>//g' | sort)
+    COUNT=$(echo "$BLOBS" | grep -c '.')
+    if [ "$COUNT" -gt 4 ]; then
+      DELETE_COUNT=$((COUNT - 4))
+      echo "$BLOBS" | head -n "$DELETE_COUNT" | while read -r BLOB; do
+        echo "Deleting $BLOB..."
+        curl -s -X DELETE "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${STORAGE_CONTAINER}/${BLOB}?${SAS_TOKEN}"
+      done
+    fi
+    echo "Pruning done. Kept $(echo "$BLOBS" | tail -n 4 | wc -l) backups."
