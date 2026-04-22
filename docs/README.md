@@ -98,11 +98,12 @@ kubectl port-forward svc/activitiesapp-web 8081:80 -n activitiesapp
 
 ### Selected Dashboard Metrics
 
-The five most useful metrics implemented in the provisioned Grafana dashboard are:
+The most useful metrics implemented in the provisioned Grafana dashboard are:
 
 - Application performance: p95 latency by route from Prometheus HTTP server histograms
 - API response success rate: 2xx vs 4xx/5xx request rates by service and status code
-- Error count and messages: Loki-backed warning/error volume plus recent error messages
+- Critical errors: Prometheus-backed HTTP 5xx request count by service
+- Warnings: Loki-backed warning volume, separate from errors
 - Near real-time logs: live Loki log stream for the API and web app
 - Activity creation rate: custom Prometheus counter emitted by the API for created activities
 
