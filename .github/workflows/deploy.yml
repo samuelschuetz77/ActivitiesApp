@@ -183,6 +183,7 @@ jobs:
       - name: Apply manifests
         run: |
           kubectl apply -f deploy/k8s/base
+          kubectl delete job db-migrate db-restore --namespace=activitiesapp --ignore-not-found=true
           kubectl apply -f deploy/k8s/data
           kubectl apply -f deploy/k8s/app
           kubectl apply -f deploy/k8s/observability
