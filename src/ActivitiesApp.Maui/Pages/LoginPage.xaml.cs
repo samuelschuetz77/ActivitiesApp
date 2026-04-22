@@ -12,7 +12,7 @@ public partial class LoginPage : ContentPage
         _authService = authService;
     }
 
-    private async void OnSignInClicked(object sender, EventArgs e)
+    private async void OnSignInClicked(object? sender, EventArgs e)
     {
         try
         {
@@ -24,7 +24,7 @@ public partial class LoginPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Sign In Failed", ex.Message, "OK");
+            await DisplayAlertAsync("Sign In Failed", ex.Message, "OK");
         }
     }
 }

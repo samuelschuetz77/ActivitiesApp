@@ -43,11 +43,12 @@ public partial class ProfilePage : ContentPage
         }
     }
 
-    private async void OnChoosePhotoClicked(object sender, EventArgs e)
+    private async void OnChoosePhotoClicked(object? sender, EventArgs e)
     {
         try
         {
-            var result = await MediaPicker.PickPhotoAsync();
+            var results = await MediaPicker.PickPhotosAsync();
+            var result = results?.FirstOrDefault();
             if (result is null) return;
             using var stream = await result.OpenReadAsync();
             using var ms = new MemoryStream();
@@ -62,7 +63,7 @@ public partial class ProfilePage : ContentPage
         catch { /* user cancelled or permission denied */ }
     }
 
-    private async void OnSignOutClicked(object sender, EventArgs e)
+    private async void OnSignOutClicked(object? sender, EventArgs e)
     {
         await _authService.SignOutAsync();
         Application.Current!.Windows[0].Page = new LoginPage(_authService);

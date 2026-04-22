@@ -378,7 +378,9 @@ public class ActivityRestClient : IActivityService
         }
     }
 
+#pragma warning disable CS0067 // required by IActivityService; REST client uses on-demand fetch, not push
     public event Action? DataChanged;
+#pragma warning restore CS0067
 
     public async Task<ZipLookupResult?> GeocodeAddressAsync(string address)
     {

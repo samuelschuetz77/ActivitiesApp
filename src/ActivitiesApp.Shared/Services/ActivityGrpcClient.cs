@@ -197,7 +197,9 @@ public class ActivityGrpcClient : IActivityService
         }
     }
 
+#pragma warning disable CS0067 // required by IActivityService; gRPC client uses on-demand fetch, not push
     public event Action? DataChanged;
+#pragma warning restore CS0067
 
     public async Task<ZipLookupResult?> GeocodeAddressAsync(string address)
     {

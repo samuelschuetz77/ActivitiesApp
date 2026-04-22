@@ -62,13 +62,13 @@
                             EmptyView="No activities yet.">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:Activity">
-                        <Frame Margin="0,4" Padding="12" CornerRadius="8" BorderColor="#dee2e6" HasShadow="False">
+                        <Border Margin="0,4" Padding="12" StrokeShape="RoundRectangle 8" Stroke="#dee2e6">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="15" />
                                 <Label Text="{Binding City}" FontSize="13" TextColor="#888888" />
                                 <Label Text="{Binding Category}" FontSize="12" TextColor="#6c757d" />
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
