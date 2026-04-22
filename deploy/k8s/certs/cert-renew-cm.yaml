@@ -11,49 +11,63 @@ data:
     APEX="activor.duckdns.org"
     WILDCARD="*.activor.duckdns.org"
     EMAIL="samuel.schuetz6@gmail.com"
-    CERT_NAME="activor"
-    LIVE_DIR="/etc/letsencrypt/live/${CERT_NAME}"
+    APEX_CERT="activor-apex"
+    WILDCARD_CERT="activor-wildcard"
     NS="activitiesapp"
 
-    echo "[1/5] Installing tools..."
+    echo "[1/6] Installing tools..."
     apk add --no-cache curl openssl ca-certificates >/dev/null
     pip install --quiet --no-cache-dir certbot certbot-dns-duckdns
 
-    echo "[2/5] Downloading kubectl..."
+    echo "[2/6] Downloading kubectl..."
     KUBECTL_VER=$(curl -sL https://dl.k8s.io/release/stable.txt)
     curl -sLO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl"
     chmod +x kubectl
     mv kubectl /usr/local/bin/
 
-    echo "[3/5] Writing DuckDNS credentials file..."
+    echo "[3/6] Writing DuckDNS credentials file..."
     CREDS=/tmp/duckdns.ini
     printf 'dns_duckdns_token = %s\n' "$DUCKDNS_TOKEN" > "$CREDS"
     chmod 600 "$CREDS"
 
-    echo "[4/5] Running certbot (DNS-01 via DuckDNS, single SAN cert)..."
-    certbot certonly \
-      --non-interactive --agree-tos --email "$EMAIL" \
-      --authenticator dns-duckdns \
-      --dns-duckdns-credentials "$CREDS" \
-      --dns-duckdns-propagation-seconds 60 \
-      --cert-name "$CERT_NAME" \
-      --keep-until-expiring \
-      -d "$APEX" -d "$WILDCARD"
+    run_certbot() {
+      CERT_NAME="$1"
+      DOMAIN="$2"
+      certbot certonly \
+        --non-interactive --agree-tos --email "$EMAIL" \
+        --authenticator dns-duckdns \
+        --dns-duckdns-credentials "$CREDS" \
+        --dns-duckdns-propagation-seconds 60 \
+        --cert-name "$CERT_NAME" \
+        --keep-until-expiring \
+        -d "$DOMAIN"
+    }
 
-    FULLCHAIN="${LIVE_DIR}/fullchain.pem"
-    PRIVKEY="${LIVE_DIR}/privkey.pem"
-    if [ ! -s "$FULLCHAIN" ] || [ ! -s "$PRIVKEY" ]; then
-      echo "ERROR: cert files missing at ${LIVE_DIR}" >&2
-      exit 1
-    fi
+    echo "[4/6] Issuing apex cert (${APEX})..."
+    run_certbot "$APEX_CERT" "$APEX"
 
-    echo "[5/5] Patching TLS secrets in namespace ${NS}..."
-    for SECRET in apex-activor-tls wildcard-activor-tls; do
-      kubectl create secret tls "$SECRET" \
-        --namespace="$NS" \
-        --cert="$FULLCHAIN" --key="$PRIVKEY" \
-        --dry-run=client -o yaml | kubectl apply -f -
+    echo "[5/6] Issuing wildcard cert (${WILDCARD})..."
+    run_certbot "$WILDCARD_CERT" "$WILDCARD"
+
+    APEX_LIVE="/etc/letsencrypt/live/${APEX_CERT}"
+    WILDCARD_LIVE="/etc/letsencrypt/live/${WILDCARD_CERT}"
+    for DIR in "$APEX_LIVE" "$WILDCARD_LIVE"; do
+      if [ ! -s "${DIR}/fullchain.pem" ] || [ ! -s "${DIR}/privkey.pem" ]; then
+        echo "ERROR: cert files missing at ${DIR}" >&2
+        exit 1
+      fi
     done
 
+    echo "[6/6] Patching TLS secrets in namespace ${NS}..."
+    kubectl create secret tls apex-activor-tls \
+      --namespace="$NS" \
+      --cert="${APEX_LIVE}/fullchain.pem" --key="${APEX_LIVE}/privkey.pem" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create secret tls wildcard-activor-tls \
+      --namespace="$NS" \
+      --cert="${WILDCARD_LIVE}/fullchain.pem" --key="${WILDCARD_LIVE}/privkey.pem" \
+      --dry-run=client -o yaml | kubectl apply -f -
+
     echo "Done. New cert NotAfter:"
-    openssl x509 -in "$FULLCHAIN" -noout -enddate
+    echo "  apex:     $(openssl x509 -in "${APEX_LIVE}/fullchain.pem" -noout -enddate)"
+    echo "  wildcard: $(openssl x509 -in "${WILDCARD_LIVE}/fullchain.pem" -noout -enddate)"
