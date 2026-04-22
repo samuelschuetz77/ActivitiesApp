@@ -440,12 +440,6 @@
           "expr": "sum(count_over_time({service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(critical|fatal|exception|failure|failed|panic|error)\" [24h]))",
           "queryType": "range",
           "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "{service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(critical|fatal|exception|failure|failed|panic|error)\"",
-          "queryType": "range",
-          "refId": "B"
         }
       ],
       "title": "Error Count (24hr)",

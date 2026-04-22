@@ -38,6 +38,52 @@ data:
               "color": {
                 "mode": "palette-classic"
               },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "s"
             },
             "overrides": []
@@ -51,15 +97,18 @@ data:
           "id": 1,
           "options": {
             "legend": {
+              "calcs": [],
               "displayMode": "table",
               "placement": "bottom",
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
               "editorMode": "code",
@@ -82,6 +131,52 @@ data:
               "color": {
                 "mode": "palette-classic"
               },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "reqps"
             },
             "overrides": []
@@ -95,15 +190,18 @@ data:
           "id": 2,
           "options": {
             "legend": {
+              "calcs": [],
               "displayMode": "table",
               "placement": "bottom",
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
               "editorMode": "code",
@@ -121,28 +219,133 @@ data:
             "type": "loki",
             "uid": "loki"
           },
+          "description": "Shows virtual real-time log messages",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+          },
+          "id": 109,
+          "options": {
+            "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": false,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "direction": "backward",
+              "editorMode": "code",
+              "expr": "{service_name=~\"activitiesapp-(api|web)\"}",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "title": "Real Time logs",
+          "type": "logs"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Displays the count of how many activities have been created in the past 24 hours",
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "palette-classic"
-              }
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "max": 25,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
             },
             "overrides": []
           },
           "gridPos": {
             "h": 8,
-            "w": 8,
-            "x": 0,
+            "w": 12,
+            "x": 12,
             "y": 8
           },
-          "id": 3,
+          "id": 6,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "(increase(activities_created_total{service_name=\"activitiesapp-api\"}[24h]))",
+              "legendFormat": "{{creation_source}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Activities Created (24hr)",
+          "type": "stat"
+        },
+        {
           "datasource": {
             "type": "loki",
             "uid": "loki"
           },
           "description": "Critical error logs only. Warnings are excluded.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 17,
+            "x": 0,
+            "y": 16
+          },
+          "id": 3,
           "options": {
             "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
             "enableLogDetails": true,
             "prettifyLogMessage": true,
             "showCommonLabels": false,
@@ -151,16 +354,28 @@ data:
             "sortOrder": "Descending",
             "wrapLogMessage": true
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "direction": "backward",
               "editorMode": "code",
               "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"(?i)(error|critical|fatal)\"}",
               "queryType": "range",
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "direction": "backward",
               "editorMode": "code",
               "expr": "{service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(critical|fatal|exception|failure|failed|panic|error)\"",
+              "hide": false,
               "queryType": "range",
               "refId": "B"
             }
@@ -173,15 +388,89 @@ data:
             "type": "loki",
             "uid": "loki"
           },
+          "description": "Number of errors in the past 24 hours",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "semi-dark-red",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
           "gridPos": {
-            "h": 10,
-            "w": 24,
-            "x": 8,
+            "h": 6,
+            "w": 7,
+            "x": 17,
             "y": 16
+          },
+          "id": 110,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "direction": "backward",
+              "editorMode": "code",
+              "expr": "sum(count_over_time({service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(critical|fatal|exception|failure|failed|panic|error)\" [24h]))",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "title": "Error Count (24hr)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 17,
+            "x": 0,
+            "y": 22
           },
           "id": 4,
           "options": {
             "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
             "enableLogDetails": true,
             "prettifyLogMessage": true,
             "showCommonLabels": false,
@@ -190,8 +479,10 @@ data:
             "sortOrder": "Descending",
             "wrapLogMessage": true
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
+              "direction": "backward",
               "editorMode": "code",
               "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"(?i)(warn|warning)\"}",
               "queryType": "range",
@@ -199,6 +490,7 @@ data:
               "refId": "A"
             },
             {
+              "direction": "backward",
               "editorMode": "code",
               "expr": "{service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(warn|warning)\"",
               "queryType": "range",
@@ -210,85 +502,151 @@ data:
         },
         {
           "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "description": "Number of how many warning have occured in the past 24 hours",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "semi-dark-yellow",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 7,
+            "x": 17,
+            "y": 22
+          },
+          "id": 111,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "direction": "backward",
+              "editorMode": "code",
+              "expr": "sum(count_over_time({service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(warn|warning)\" [24h]))",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "title": "Warning Count (24hr)",
+          "type": "stat"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 29
+          },
+          "id": 20,
+          "panels": [],
+          "title": "Google API Usage",
+          "type": "row"
+        },
+        {
+          "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "palette-classic"
+                "mode": "thresholds"
               },
-              "fillOpacity": 20,
-              "max": 25,
+              "mappings": [],
               "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#6aa84f"
+                  },
+                  {
+                    "color": "#f1c232",
+                    "value": 10
+                  },
+                  {
+                    "color": "#cc4125",
+                    "value": 25
+                  }
+                ]
+              },
               "unit": "none"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 8
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 30
           },
-          "id": 6,
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "editorMode": "code",
-              "expr": "sum by (creation_source) (increase(activities_created_total{service_name=\"activitiesapp-api\"}[1h]))",
-              "legendFormat": "{{creation_source}}",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Activity Creation Rate per Hour",
-          "type": "timeseries"
-        },
-        {
-          "collapsed": false,
-          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
-          "id": 20,
-          "title": "Google API Usage",
-          "type": "row"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "steps": [
-                  { "color": "#6aa84f", "value": null },
-                  { "color": "#f1c232", "value": 10 },
-                  { "color": "#cc4125", "value": 25 }
-                ]
-              },
-              "unit": "none",
-              "min": 0
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 7, "w": 24, "x": 0, "y": 27 },
           "id": 7,
           "options": {
             "displayMode": "gradient",
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "maxVizHeight": 300,
+            "minVizHeight": 16,
+            "minVizWidth": 8,
             "namePlacement": "left",
             "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
             "showUnfilled": true,
-            "text": {}
+            "sizing": "auto",
+            "text": {},
+            "valueMode": "color"
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
               "editorMode": "code",
@@ -302,31 +660,89 @@ data:
           "type": "bargauge"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
-              "color": { "mode": "palette-classic" },
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 4,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
                 "showPoints": "auto",
-                "fillOpacity": 12
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
               },
               "unit": "none"
             },
             "overrides": []
           },
-          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 34 },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 37
+          },
           "id": 8,
           "options": {
             "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
               "displayMode": "table",
               "placement": "bottom",
-              "showLegend": true,
-              "calcs": ["lastNotNull", "max"]
+              "showLegend": true
             },
-            "tooltip": { "mode": "multi", "sort": "desc" }
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc"
+            }
           },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
               "editorMode": "code",
@@ -341,255 +757,478 @@ data:
         },
         {
           "collapsed": false,
-          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 },
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 47
+          },
           "id": 100,
+          "panels": [],
           "title": "k6",
           "type": "row"
         },
         {
-          "id": 101,
-          "title": "Requests per Second",
           "description": "Should stay at ~100 RPS throughout the rollout. Any drop indicates a routing gap.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 45, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_reqs_total[15s]))",
-              "legendFormat": "RPS"
-            }
-          ],
           "fieldConfig": {
             "defaults": {
-              "unit": "reqps",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  { "color": "red", "value": null },
-                  { "color": "yellow", "value": 80 },
-                  { "color": "green", "value": 95 }
+                  {
+                    "color": "red"
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 80
+                  },
+                  {
+                    "color": "green",
+                    "value": 95
+                  }
                 ]
-              }
-            }
-          }
-        },
-        {
-          "id": 102,
-          "title": "Error Rate",
-          "description": "Percentage of requests returning 5xx. Should be 0% throughout — any blip is a downtime event.",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 45, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_req_failed_total[15s])) / sum(rate(k6_http_reqs_total[15s])) * 100",
-              "legendFormat": "Error %"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "red", "value": 0.1 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 103,
-          "title": "Latency — p95",
-          "description": "p95 response time. A spike here during the rollout indicates pods draining slowly.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 53, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "histogram_quantile(0.95, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
-              "legendFormat": "p95"
+              },
+              "unit": "reqps"
             },
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "histogram_quantile(0.50, sum(rate(k6_http_req_duration_bucket[15s])) by (le))",
-              "legendFormat": "p50"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ms",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 500 },
-                  { "color": "red", "value": 2000 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 104,
-          "title": "Active VUs",
-          "description": "Virtual users k6 is running. Ramps to 50 at peak — if VUs spike toward maxVUs (100) it means responses are slow.",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 53, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "k6_vus",
-              "legendFormat": "VUs"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 75 },
-                  { "color": "red", "value": 90 }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "id": 105,
-          "title": "Dropped Requests (this range)",
-          "description": "Total failed HTTP responses in the selected time range. For a zero-downtime deploy this should read 0.",
-          "type": "stat",
-          "gridPos": { "x": 0, "y": 61, "w": 12, "h": 6 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_req_failed_total[$__range]))",
-              "legendFormat": "failures"
-            }
-          ],
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "reduceOptions": { "calcs": ["lastNotNull"] },
-            "textMode": "value"
+            "overrides": []
           },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 48
+          },
+          "id": 101,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(rate(k6_http_reqs_total[15s]))",
+              "legendFormat": "RPS",
+              "refId": "A"
+            }
+          ],
+          "title": "Requests per Second",
+          "type": "timeseries"
+        },
+        {
+          "description": "Total requests k6 sent in the selected range. Pairs with the failures count — e.g. 0 failures out of 14,000 requests means a clean deploy.",
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
+              "color": {
+                "fixedColor": "blue",
+                "mode": "fixed"
+              },
               "decimals": 0,
+              "mappings": [],
               "noValue": "0",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "red", "value": 1 }
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
                 ]
-              }
-            }
-          }
-        },
-        {
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 48
+          },
           "id": 106,
-          "title": "Total Requests (this range)",
-          "description": "Total requests k6 sent in the selected range. Pairs with the failures count — e.g. 0 failures out of 14,000 requests means a clean deploy.",
-          "type": "stat",
-          "gridPos": { "x": 12, "y": 61, "w": 12, "h": 6 },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_reqs_total[$__range]))",
-              "legendFormat": "requests"
-            }
-          ],
           "options": {
             "colorMode": "value",
             "graphMode": "none",
-            "reduceOptions": { "calcs": ["lastNotNull"] },
-            "textMode": "value"
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "value",
+            "wideLayout": true
           },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 0,
-              "noValue": "0",
-              "color": { "mode": "fixed", "fixedColor": "blue" }
-            }
-          }
-        },
-        {
-          "id": 107,
-          "title": "Dropped Requests Over Time",
-          "description": "Per-30s bucket of failed requests. Any non-zero bar marks the moment packets were dropped — correlate the timestamp with the rollout log to find which pod transition caused it.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 67, "w": 24, "h": 9 },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(increase(k6_http_req_failed_total[30s]))",
-              "legendFormat": "failures / 30s"
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(k6_http_reqs_total[$__range]))",
+              "legendFormat": "requests",
+              "refId": "A"
             }
           ],
+          "title": "Total Requests (this range)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Total failed HTTP responses in the selected time range. For a zero-downtime deploy this should read 0.",
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
+              "color": {
+                "mode": "thresholds"
+              },
               "decimals": 0,
+              "mappings": [],
+              "noValue": "0",
+              "thresholds": {
+                "mode": "percentage",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 2
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 56
+          },
+          "id": 105,
+          "options": {
+            "minVizHeight": 75,
+            "minVizWidth": 75,
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "sizing": "auto"
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(k6_http_req_failed_total[$__range]))",
+              "legendFormat": "failures",
+              "refId": "A"
+            }
+          ],
+          "title": "Dropped Requests (this range)",
+          "type": "gauge"
+        },
+        {
+          "description": "Per-30s bucket of failed requests. Any non-zero bar marks the moment packets were dropped — correlate the timestamp with the rollout log to find which pod transition caused it.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "red",
+                "mode": "fixed"
+              },
               "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "bars",
                 "fillOpacity": 70,
-                "lineWidth": 1
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
               },
-              "color": { "mode": "fixed", "fixedColor": "red" }
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 62
+          },
+          "id": 107,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
             }
-          }
-        },
-        {
-          "id": 108,
-          "title": "Requests vs Failures Over Time",
-          "description": "Both series on the same panel. Healthy deploy = green line flat at target RPS, red line flat at zero throughout the rollout window.",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 76, "w": 24, "h": 9 },
+          },
+          "pluginVersion": "12.0.2",
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_reqs_total[30s]))",
-              "legendFormat": "requests/s"
-            },
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(k6_http_req_failed_total[30s]))",
-              "legendFormat": "failures/s"
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(k6_http_req_failed_total[30s]))",
+              "legendFormat": "failures / 30s",
+              "refId": "A"
             }
           ],
+          "title": "Dropped Requests Over Time",
+          "type": "timeseries"
+        },
+        {
+          "description": "Both series on the same panel. Healthy deploy = green line flat at target RPS, red line flat at zero throughout the rollout window.",
           "fieldConfig": {
             "defaults": {
-              "unit": "reqps",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 10,
-                "lineWidth": 2
-              }
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
             },
             "overrides": [
               {
-                "matcher": { "id": "byName", "options": "failures/s" },
+                "matcher": {
+                  "id": "byName",
+                  "options": "failures/s"
+                },
                 "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
                 ]
               },
               {
-                "matcher": { "id": "byName", "options": "requests/s" },
+                "matcher": {
+                  "id": "byName",
+                  "options": "requests/s"
+                },
                 "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
                 ]
               }
             ]
-          }
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 71
+          },
+          "id": 108,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(rate(k6_http_reqs_total[30s]))",
+              "legendFormat": "requests/s",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(rate(k6_http_req_failed_total[30s]))",
+              "legendFormat": "failures/s",
+              "refId": "B"
+            }
+          ],
+          "title": "Requests vs Failures Over Time",
+          "type": "timeseries"
         }
       ],
+      "preload": false,
       "refresh": "5s",
       "schemaVersion": 41,
       "tags": [
@@ -601,9 +1240,12 @@ data:
           {
             "allValue": ".*",
             "current": {
-              "selected": true,
-              "text": ["All"],
-              "value": ["$__all"]
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
             },
             "datasource": {
               "type": "prometheus",
@@ -627,9 +1269,12 @@ data:
           {
             "allValue": ".*",
             "current": {
-              "selected": true,
-              "text": ["All"],
-              "value": ["$__all"]
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
             },
             "datasource": {
               "type": "prometheus",
@@ -660,5 +1305,5 @@ data:
       "timezone": "browser",
       "title": "ActivitiesApp Observability",
       "uid": "activitiesapp-observability",
-      "version": 3
+      "version": 1
     }
