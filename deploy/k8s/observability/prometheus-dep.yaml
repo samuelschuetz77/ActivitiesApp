@@ -49,9 +49,18 @@ spec:
               subPath: prometheus.yml
             - name: prometheus-data
               mountPath: /prometheus
+            - name: uptime-kuma-secret
+              mountPath: /etc/prometheus/secrets
+              readOnly: true
       volumes:
         - name: prometheus-config
           configMap:
             name: prometheus-config
         - name: prometheus-data
           emptyDir: {}
+        - name: uptime-kuma-secret
+          secret:
+            secretName: uptime-kuma-secret
+            items:
+              - key: api-key
+                path: uptime-kuma-api-key
