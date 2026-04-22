@@ -4,12 +4,14 @@ metadata:
   name: postgres-backup
   namespace: activitiesapp
 spec:
-  schedule: "30 22 * * *"
+  schedule: "50 1 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      backoffLimit: 0
       template:
         spec:
-          restartPolicy: OnFailure
+          restartPolicy: Never
           containers:
             - name: backup-worker
               image: postgres:16.4
