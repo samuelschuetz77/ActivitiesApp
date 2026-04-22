@@ -20,9 +20,9 @@ data:
 
       - job_name: uptime-kuma
         scrape_interval: 30s
-        scheme: https
         static_configs:
-          - targets: ["uptime.activor.duckdns.org"]
+          - targets: ["uptime-kuma:3001"]
         metrics_path: /metrics
-        authorization:
-          credentials_file: /etc/prometheus/secrets/uptime-kuma-api-key
+        basic_auth:
+          username: caelchurch
+          password_file: /etc/prometheus/secrets/uptime-kuma-password
