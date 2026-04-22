@@ -9,7 +9,7 @@ New `deploy/k8s/certs/` manifests:
 - `cert-renew-cm.yaml` — ConfigMap `cert-renew-script-config` with `renew.sh`
   (installs certbot + certbot-dns-duckdns + kubectl at runtime, runs DNS-01 via
   DuckDNS, patches both TLS secrets)
-- `cert-renew-cronjob.yaml` — CronJob `cert-renew` schedule `0 14 * * 3`,
+- `cert-renew-cronjob.yaml` — CronJob `cert-renew` schedule `18 14 * * 3`,
   `timeZone: America/Denver`, single SAN cert covering `activor.duckdns.org` +
   `*.activor.duckdns.org`
 
@@ -37,6 +37,20 @@ CronJobs don't backfill. Manual kickoff once manifests applied:
 
 ### Prerequisite
 GitHub repo secret `DUCKDNS_TOKEN` added manually (confirmed 2026-04-22).
+
+### Fix: DuckDNS single-TXT-record limitation
+First kickoff failed with `unauthorized` / "Incorrect TXT record ..." for apex.
+Root cause: DuckDNS allows only one TXT record per domain, but a SAN cert
+covering `activor.duckdns.org` + `*.activor.duckdns.org` produces two ACME
+challenges that both target `_acme-challenge.activor.duckdns.org`. The plugin
+writes value A, then overwrites with value B — first challenge fails validation.
+
+Resolution: issue two sequential certs instead of one SAN cert. `renew.sh` now
+runs certbot twice (`--cert-name activor-apex` with `-d activor.duckdns.org`,
+then `--cert-name activor-wildcard` with `-d *.activor.duckdns.org`). Each call
+sets TXT, validates, and clears before the next call starts. No collision.
+`apex-activor-tls` gets the apex cert; `wildcard-activor-tls` gets the wildcard
+cert.
 
 ### Verification
 - `kubectl get cronjob cert-renew -n activitiesapp` — SCHEDULE + TIMEZONE

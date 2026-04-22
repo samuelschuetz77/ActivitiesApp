@@ -4,7 +4,7 @@ metadata:
   name: cert-renew
   namespace: activitiesapp
 spec:
-  schedule: "0 14 * * 3"
+  schedule: "18 14 * * 3"
   timeZone: "America/Denver"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600
