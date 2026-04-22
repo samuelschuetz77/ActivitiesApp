@@ -179,12 +179,17 @@ jobs:
             --from-literal=GOOGLE_MAPS_API_KEY='${{ secrets.GOOGLE_MAPS_API_KEY }}' \
             --from-literal=AZURE_CLIENT_SECRET='${{ secrets.AZURE_CLIENT_SECRET }}' \
             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic duckdns-secret \
+            --namespace=activitiesapp \
+            --from-literal=DUCKDNS_TOKEN='${{ secrets.DUCKDNS_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply manifests
         run: |
           kubectl apply -f deploy/k8s/base
           kubectl delete job db-migrate db-restore --namespace=activitiesapp --ignore-not-found=true
           kubectl apply -f deploy/k8s/data
+          kubectl apply -f deploy/k8s/certs
           kubectl apply -f deploy/k8s/app
           kubectl apply -f deploy/k8s/observability
 

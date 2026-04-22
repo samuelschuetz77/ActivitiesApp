@@ -1,5 +1,50 @@
 # Iteration Log
 
+## 2026-04-22 — Weekly TLS cert renewal CronJob
+
+### What was added
+New `deploy/k8s/certs/` manifests:
+- `cert-renew-sa.yaml` — ServiceAccount `cert-renewer` + Role + RoleBinding restricted
+  to `get/update/patch` on resourceNames `apex-activor-tls` and `wildcard-activor-tls`
+- `cert-renew-cm.yaml` — ConfigMap `cert-renew-script-config` with `renew.sh`
+  (installs certbot + certbot-dns-duckdns + kubectl at runtime, runs DNS-01 via
+  DuckDNS, patches both TLS secrets)
+- `cert-renew-cronjob.yaml` — CronJob `cert-renew` schedule `0 14 * * 3`,
+  `timeZone: America/Denver`, single SAN cert covering `activor.duckdns.org` +
+  `*.activor.duckdns.org`
+
+`.github/workflows/deploy.yml` updated:
+- `Create/update secrets` step appends `duckdns-secret` from GH repo secret `DUCKDNS_TOKEN`
+- `Apply manifests` step applies `deploy/k8s/certs` after `data`
+
+### Why CronJob instead of cert-manager
+Professor ruling: "do not use the Cert Manager plugin... it can break things when
+multiple student projects are using the same cluster." Cluster has cert-manager
+installed (namespace `cert-manager`) with `ClusterIssuer/letsencrypt-prod` using
+HTTP-01, but other tenants (cookbook, incrementum, survivors, cttanks) have
+challenges stuck `invalid`. Plan creates zero cert-manager resources.
+
+### Pattern reused
+Mirrors working backup CronJob `deploy/k8s/data/postgres-backup-cronjob.yaml`.
+Four crucial fields copied verbatim: `timeZone: America/Denver`,
+`concurrencyPolicy: Forbid`, `jobTemplate.spec.backoffLimit: 0`,
+`template.spec.restartPolicy: Never`. These were the lines identified from
+commits `a1d0a59` + `0bbb578` as what made the backup cronjob actually fire.
+
+### First-run trigger
+CronJobs don't backfill. Manual kickoff once manifests applied:
+`kubectl create job cert-renew-bootstrap --from=cronjob/cert-renew -n activitiesapp`
+
+### Prerequisite
+GitHub repo secret `DUCKDNS_TOKEN` added manually (confirmed 2026-04-22).
+
+### Verification
+- `kubectl get cronjob cert-renew -n activitiesapp` — SCHEDULE + TIMEZONE
+- `openssl x509 -noout -enddate` on decoded `tls.crt` from both secrets
+- `openssl s_client -servername <host> -connect <host>:443` for each ingress host
+
+
+
 ## 2026-04-17 — Core unit + integration tests
 
 ### What was added

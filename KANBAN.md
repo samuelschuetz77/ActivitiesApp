@@ -22,6 +22,7 @@ When working on any item below, after completing it:
 - [x] **Google Places API Integration** — Places search, geocoding
 - [x] **gRPC Service** — ActivityGrpcService for mobile-backend communication
 - [x] **Observability Stack** — OTEL, Prometheus, Loki, Tempo, Grafana deployed
+- [x] **Automate TLS cert cycling** — weekly CronJob renews DuckDNS Let's Encrypt cert (apex + wildcard) via DNS-01; first run 2026-04-22 14:00 MT, recurring Wed 14:00 MT
 
 ## IN PROGRESS
 
