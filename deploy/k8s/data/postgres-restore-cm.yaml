@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: restore-script-config
+  namespace: activitiesapp
+data:
+  restore.sh: |
+    #!/bin/sh
+    set -e
+
+    apt-get update -qq && apt-get install -y curl -qq
+
+    if [ "$BACKUP_FILE" = "latest" ]; then
+      echo "Finding latest backup..."
+      BACKUP_FILE=$(curl -s "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${STORAGE_CONTAINER}?restype=container&comp=list&${SAS_TOKEN}" \
+        | grep -o '<Name>[^<]*</Name>' | sed 's/<[^>]*>//g' | sort | tail -1)
+      echo "Latest backup: $BACKUP_FILE"
+    fi
+
+    if [ -z "$BACKUP_FILE" ]; then
+      echo "ERROR: No backup file found in container."
+      exit 1
+    fi
+
+    echo "Downloading ${BACKUP_FILE}..."
+    curl -f "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${STORAGE_CONTAINER}/${BACKUP_FILE}?${SAS_TOKEN}" \
+      -o /tmp/restore.sql
+
+    DOWNTIME_START=$(date +%s)
+
+    echo "Terminating active connections to ${PG_DATABASE}..."
+    psql -h "$PG_HOST" -U "$PG_USER" postgres -c \
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$PG_DATABASE' AND pid <> pg_backend_pid();"
+
+    echo "Dropping ${PG_DATABASE}..."
+    psql -h "$PG_HOST" -U "$PG_USER" postgres -c "DROP DATABASE IF EXISTS \"${PG_DATABASE}\";"
+
+    echo "Recreating ${PG_DATABASE}..."
+    psql -h "$PG_HOST" -U "$PG_USER" postgres -c "CREATE DATABASE \"${PG_DATABASE}\" OWNER \"${PG_USER}\";"
+
+    echo "Restoring from ${BACKUP_FILE}..."
+    psql -h "$PG_HOST" -U "$PG_USER" "$PG_DATABASE" < /tmp/restore.sql
+
+    DOWNTIME_END=$(date +%s)
+    echo "Restore complete: ${BACKUP_FILE}"
+    echo "RESTORE_DOWNTIME_SECONDS=$((DOWNTIME_END - DOWNTIME_START))"
+    echo "App was unavailable for $((DOWNTIME_END - DOWNTIME_START)) seconds."
+    rm /tmp/restore.sql

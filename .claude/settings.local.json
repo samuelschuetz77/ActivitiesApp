@@ -75,7 +75,12 @@
       "Bash(tailscale status *)",
       "Bash(nc -zv 10.43.132.244 5432)",
       "Bash(echo \"exit: $?\")",
-      "mcp__claude_ai_Google_Drive__read_file_content"
+      "mcp__claude_ai_Google_Drive__read_file_content",
+      "PowerShell(gcloud billing accounts describe *)",
+      "PowerShell(gcloud services list *)",
+      "PowerShell(gcloud logging read *)",
+      "PowerShell(gcloud monitoring metrics list *)",
+      "PowerShell(gcloud beta billing budgets list *)"
     ]
   }
 }
