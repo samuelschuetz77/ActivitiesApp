@@ -169,71 +169,17 @@ data:
           "type": "logs"
         },
         {
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 8
-          },
-          "id": 4,
           "datasource": {
             "type": "loki",
             "uid": "loki"
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "editorMode": "code",
-              "expr": "sum by (service_name) (count_over_time({service_name=~\"activitiesapp-(api|web)\", detected_level=~\"[Ww][Aa][Rr][Nn].*\"}[5m]))",
-              "legendFormat": "{{service_name}} warnings",
-              "queryType": "range",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Warnings",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "unit": "none"
-            },
-            "overrides": []
           },
           "gridPos": {
             "h": 10,
             "w": 24,
-            "x": 0,
+            "x": 8,
             "y": 16
           },
-          "id": 5,
+          "id": 4,
           "options": {
             "dedupStrategy": "none",
             "enableLogDetails": true,
@@ -247,18 +193,19 @@ data:
           "targets": [
             {
               "editorMode": "code",
-              "expr": "{service_name=~\"(?i)activitiesapp.*\", detected_level=~\"(?i)(error|warn|critical|fatal)\"}",
+              "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"(?i)(warn|warning)\"}",
               "queryType": "range",
+              "range": true,
               "refId": "A"
             },
             {
               "editorMode": "code",
-              "expr": "{service_name=~\"(?i)activitiesapp.*\"} |~ \"(?i)(error|warn|critical|fatal|exception|failure|failed|panic)\"",
+              "expr": "{service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(warn|warning)\"",
               "queryType": "range",
               "refId": "B"
             }
           ],
-          "title": "Recent Error Messages",
+          "title": "Warnings",
           "type": "logs"
         },
         {
