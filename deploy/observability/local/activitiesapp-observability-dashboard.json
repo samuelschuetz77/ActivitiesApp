@@ -129,50 +129,37 @@
         "y": 8
       },
       "id": 3,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "fillOpacity": 20,
-          "unit": "none"
-        },
-        "overrides": []
-      },
       "datasource": {
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Counts all error-level logs and error-like messages while excluding warnings. Different series represent different error types, so the panel stays useful even when there are no HTTP 5xx responses.",
+      "description": "Critical error logs only. Warnings are excluded.",
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (service_name, detected_level) (count_over_time({service_name=~\"activitiesapp-(api|web)\", detected_level=~\"(?i)(error|critical|fatal)\"}[5m]))",
-          "legendFormat": "{{service_name}} {{detected_level}}",
+          "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"(?i)(error|critical|fatal)\"}",
           "queryType": "range",
           "refId": "A"
         },
         {
           "editorMode": "code",
-          "expr": "sum by (service_name) (count_over_time({service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(exception|failure|failed|panic|error)\" [5m]))",
-          "legendFormat": "{{service_name}} message errors",
+          "expr": "{service_name=~\"activitiesapp-(api|web)\"} |~ \"(?i)(critical|fatal|exception|failure|failed|panic|error)\"",
           "queryType": "range",
           "refId": "B"
         }
       ],
-      "title": "All Errors",
-      "type": "timeseries"
+      "title": "Critical Errors",
+      "type": "logs"
     },
     {
       "fieldConfig": {
