@@ -9,7 +9,7 @@ New `deploy/k8s/certs/` manifests:
 - `cert-renew-cm.yaml` — ConfigMap `cert-renew-script-config` with `renew.sh`
   (installs certbot + certbot-dns-duckdns + kubectl at runtime, runs DNS-01 via
   DuckDNS, patches both TLS secrets)
-- `cert-renew-cronjob.yaml` — CronJob `cert-renew` schedule `0 14 * * 3`,
+- `cert-renew-cronjob.yaml` — CronJob `cert-renew` schedule `18 14 * * 3`,
   `timeZone: America/Denver`, single SAN cert covering `activor.duckdns.org` +
   `*.activor.duckdns.org`
 
