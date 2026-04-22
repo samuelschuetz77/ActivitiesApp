@@ -176,12 +176,6 @@ app.Use(async (context, next) =>
 
 app.MapGrpcService<ActivityGrpcService>().EnableGrpcWeb();
 
-// Temporary: emit test warning/error so Grafana "Error Count and Warnings" panel has data
-app.Logger.LogWarning("Test warning for observability");
-app.Logger.LogError("Test error for observability");
-
-
-
 app.MapDelete("/api/admin/purge-google-places", async (IActivityDbContext db, ILogger<Program> log) =>
 {
     var googleActivities = await db.Activities.Where(a => a.PlaceId != null && a.PlaceId != "").ToListAsync();

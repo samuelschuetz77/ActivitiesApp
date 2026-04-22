@@ -136,6 +136,16 @@ data:
             "y": 8
           },
           "id": 3,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "fillOpacity": 20,
+              "unit": "none"
+            },
+            "overrides": []
+          },
           "options": {
             "legend": {
               "displayMode": "list",
@@ -150,13 +160,58 @@ data:
           "targets": [
             {
               "editorMode": "code",
-              "expr": "sum by (service_name, detected_level) (count_over_time({service_name=~\"activitiesapp-(api|web)\", detected_level=~\"[Ww][Aa][Rr][Nn].*|[Ee][Rr][Rr][Oo][Rr]\"}[5m]))",
-              "legendFormat": "{{service_name}} {{detected_level}}",
+              "expr": "sum by (service_name, http_response_status_code) (increase(http_server_request_duration_seconds_count{service_name=~\"activitiesapp-(api|web)\", http_response_status_code=~\"5..\"}[5m]))",
+              "legendFormat": "{{service_name}} {{http_response_status_code}}",
               "queryType": "range",
               "refId": "A"
             }
           ],
-          "title": "Error Count and Warnings",
+          "title": "Critical Errors (HTTP 5xx)",
+          "type": "timeseries"
+        },
+        {
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 8
+          },
+          "id": 4,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum by (service_name) (count_over_time({service_name=~\"activitiesapp-(api|web)\", detected_level=~\"[Ww][Aa][Rr][Nn].*\"}[5m]))",
+              "legendFormat": "{{service_name}} warnings",
+              "queryType": "range",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Warnings",
           "type": "timeseries"
         },
         {
@@ -170,17 +225,19 @@ data:
                 "mode": "palette-classic"
               },
               "fillOpacity": 20,
+              "max": 25,
+              "min": 0,
               "unit": "none"
             },
             "overrides": []
           },
           "gridPos": {
             "h": 8,
-            "w": 16,
-            "x": 8,
+            "w": 8,
+            "x": 16,
             "y": 8
           },
-          "id": 4,
+          "id": 5,
           "options": {
             "legend": {
               "displayMode": "list",
@@ -211,41 +268,8 @@ data:
           },
           "gridPos": {
             "h": 10,
-            "w": 12,
+            "w": 24,
             "x": 0,
-            "y": 16
-          },
-          "id": 5,
-          "options": {
-            "dedupStrategy": "none",
-            "enableLogDetails": true,
-            "prettifyLogMessage": true,
-            "showCommonLabels": false,
-            "showLabels": true,
-            "showTime": true,
-            "sortOrder": "Descending",
-            "wrapLogMessage": true
-          },
-          "targets": [
-            {
-              "editorMode": "code",
-              "expr": "{service_name=~\"activitiesapp-(api|web)\", detected_level=~\"[Ww][Aa][Rr][Nn].*|[Ee][Rr][Rr][Oo][Rr]\"}",
-              "queryType": "range",
-              "refId": "A"
-            }
-          ],
-          "title": "Recent Error Messages",
-          "type": "logs"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
             "y": 16
           },
           "id": 6,
@@ -267,7 +291,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Near Real-Time Logs",
+          "title": "Recent Logs",
           "type": "logs"
         },
         {
