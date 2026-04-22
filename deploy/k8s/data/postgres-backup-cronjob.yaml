@@ -4,8 +4,8 @@ metadata:
   name: postgres-backup
   namespace: activitiesapp
 spec:
-  schedule: "50 1 * * *"
-  concurrencyPolicy: Forbid
+  schedule: "0 2 * * *"
+  timeZone: "America/Denver"
   jobTemplate:
     spec:
       backoffLimit: 0
