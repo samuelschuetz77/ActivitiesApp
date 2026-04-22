@@ -1,0 +1,62 @@
+name: Restore PostgreSQL Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_file:
+        description: "Backup filename (e.g. backup-2026-04-21-020001.sql) or 'latest' for most recent"
+        required: false
+        default: "latest"
+        type: string
+      confirm:
+        description: "Type RESTORE to confirm — this overwrites the live database"
+        required: true
+        type: string
+
+jobs:
+  restore:
+    name: Restore Database from Backup
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "RESTORE" ]; then
+            echo "::error::Must type RESTORE to confirm. Got: '${{ github.event.inputs.confirm }}'"
+            exit 1
+          fi
+
+      - name: Set KUBECONFIG
+        run: echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Verify cluster access
+        run: kubectl get nodes
+
+      - name: Apply restore ConfigMap
+        run: kubectl apply -f deploy/k8s/data/postgres-restore-cm.yaml
+
+      - name: Delete previous restore job
+        run: kubectl delete job db-restore --namespace=activitiesapp --ignore-not-found=true
+
+      - name: Create restore job
+        run: |
+          sed "s|BACKUP_FILE_PLACEHOLDER|${{ github.event.inputs.backup_file }}|g" \
+            deploy/k8s/data/postgres-restore-job.yaml | kubectl apply -f -
+
+      - name: Wait for restore to complete
+        run: |
+          kubectl wait job/db-restore \
+            --namespace=activitiesapp \
+            --for=condition=complete \
+            --timeout=300s || {
+            echo "::error::Restore job did not complete within 300s"
+            kubectl describe job db-restore --namespace=activitiesapp
+            exit 1
+          }
+
+      - name: Show restore logs
+        if: always()
+        run: |
+          POD=$(kubectl get pods --namespace=activitiesapp -l job-name=db-restore -o jsonpath='{.items[0].metadata.name}')
+          kubectl logs "$POD" --namespace=activitiesapp
