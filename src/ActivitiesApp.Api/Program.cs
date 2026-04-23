@@ -39,7 +39,8 @@ if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
         var host = builder.Configuration["POSTGRES_HOST"] ?? defaultPostgresHost;
         var db = builder.Configuration["POSTGRES_DB"] ?? "activitiesdb";
         var user = builder.Configuration["POSTGRES_USER"] ?? "activitiesapp";
-        var password = builder.Configuration["POSTGRES_PASSWORD"] ?? "activitiesapp";
+        var password = builder.Configuration["POSTGRES_PASSWORD"]
+            ?? throw new InvalidOperationException("POSTGRES_PASSWORD is required when DATABASE_PROVIDER=Postgres");
         connectionString = $"Host={host};Port=5432;Database={db};Username={user};Password={password}";
     }
 
@@ -52,8 +53,10 @@ if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     // Register Cosmos context for seeding (read-only source of truth)
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseCosmos(
-            accountEndpoint: builder.Configuration["CosmosDb:Endpoint"] ?? "https://localhost:8081/",
-            accountKey: builder.Configuration["CosmosDb:Key"] ?? "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
+            accountEndpoint: builder.Configuration["CosmosDb:Endpoint"]
+                ?? throw new InvalidOperationException("CosmosDb:Endpoint is required"),
+            accountKey: builder.Configuration["CosmosDb:Key"]
+                ?? throw new InvalidOperationException("CosmosDb:Key is required"),
             databaseName: "ActivitiesDb"
         ));
 
@@ -64,8 +67,10 @@ else
     // Default: Cosmos DB (local dev)
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseCosmos(
-            accountEndpoint: builder.Configuration["CosmosDb:Endpoint"] ?? "https://localhost:8081/",
-            accountKey: builder.Configuration["CosmosDb:Key"] ?? "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
+            accountEndpoint: builder.Configuration["CosmosDb:Endpoint"]
+                ?? throw new InvalidOperationException("CosmosDb:Endpoint is required"),
+            accountKey: builder.Configuration["CosmosDb:Key"]
+                ?? throw new InvalidOperationException("CosmosDb:Key is required"),
             databaseName: "ActivitiesDb"
         ));
 
