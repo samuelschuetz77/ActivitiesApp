@@ -17,5 +17,6 @@ scrape_configs:
     static_configs:
       - targets: ["uptime.activor.duckdns.org"]
     metrics_path: /metrics
-    authorization:
-      credentials: $UPTIME_KUMA_API_KEY
+    basic_auth:
+      username: api
+      password: $UPTIME_KUMA_API_KEY
