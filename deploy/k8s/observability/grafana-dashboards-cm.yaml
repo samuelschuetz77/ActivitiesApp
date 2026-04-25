@@ -819,7 +819,7 @@ data:
                     "uid": "prometheus"
                   },
                   "editorMode": "code",
-                  "expr": "sum(http_server_active_requests{service_name=~\"activitiesapp-(api|web)\"})",
+                  "expr": "active_users{service_name=\"activitiesapp-web\"}",
                   "legendFormat": "active requests",
                   "range": true,
                   "refId": "A"
