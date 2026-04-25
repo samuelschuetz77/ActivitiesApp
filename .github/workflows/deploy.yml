@@ -170,6 +170,9 @@ jobs:
         run: kubectl apply -f deploy/k8s/base/namespace.yaml
 
       - name: Create/update secrets
+        env:
+          GCP_CLIENT_EMAIL: ${{ fromJson(secrets.GCP_MONITORING_KEY).client_email }}
+          GCP_PRIVATE_KEY: ${{ fromJson(secrets.GCP_MONITORING_KEY).private_key }}
         run: |
           kubectl create secret generic app-secrets \
             --namespace=activitiesapp \
@@ -184,8 +187,6 @@ jobs:
             --namespace=activitiesapp \
             --from-literal=DUCKDNS_TOKEN='${{ secrets.DUCKDNS_TOKEN }}' \
             --dry-run=client -o yaml | kubectl apply -f -
-          GCP_CLIENT_EMAIL=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_email"])')
-          GCP_PRIVATE_KEY=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["private_key"])')
           kubectl create secret generic gcp-grafana-secrets \
             --namespace=activitiesapp \
             --from-literal=GCP_CLIENT_EMAIL="$GCP_CLIENT_EMAIL" \
