@@ -955,7 +955,7 @@ data:
               "pluginVersion": "12.0.2",
               "targets": [
                 {
-                  "aliasBy": "Requests",
+                  "aliasBy": "{{resource.label.service}} requests",
                   "alignmentPeriod": "+86400s",
                   "crossSeriesReducer": "REDUCE_SUM",
                   "datasource": {
@@ -963,12 +963,10 @@ data:
                     "uid": "gcm"
                   },
                   "editorMode": "visual",
-                  "filters": [
-                    "resource.labels.service",
-                    "=",
-                    "maps.googleapis.com"
+                  "filters": [],
+                  "groupBys": [
+                    "resource.label.service"
                   ],
-                  "groupBys": [],
                   "metricKind": "DELTA",
                   "metricType": "serviceruntime.googleapis.com/api/request_count",
                   "perSeriesAligner": "ALIGN_DELTA",
@@ -978,7 +976,7 @@ data:
                   "valueType": "INT64"
                 },
                 {
-                  "aliasBy": "Daily Limit",
+                  "aliasBy": "{{resource.label.service}} daily limit",
                   "alignmentPeriod": "+86400s",
                   "crossSeriesReducer": "REDUCE_MAX",
                   "datasource": {
@@ -986,12 +984,10 @@ data:
                     "uid": "gcm"
                   },
                   "editorMode": "visual",
-                  "filters": [
-                    "resource.labels.service",
-                    "=",
-                    "maps.googleapis.com"
+                  "filters": [],
+                  "groupBys": [
+                    "resource.label.service"
                   ],
-                  "groupBys": [],
                   "metricKind": "GAUGE",
                   "metricType": "serviceruntime.googleapis.com/quota/limit",
                   "perSeriesAligner": "ALIGN_MEAN",
@@ -1001,7 +997,7 @@ data:
                   "valueType": "INT64"
                 }
               ],
-              "title": "Google API Requests Per Day",
+              "title": "GCP API Requests & Quota Per Day (by service)",
               "type": "timeseries"
             }
           ],
