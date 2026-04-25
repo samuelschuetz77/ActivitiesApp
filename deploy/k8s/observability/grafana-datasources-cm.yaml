@@ -29,7 +29,7 @@ data:
         access: proxy
         editable: false
         jsonData:
-          authenticationType: key
+          authenticationType: jwt
           defaultProject: activitiesapp-490113
           clientEmail: $__env{GCP_CLIENT_EMAIL}
           tokenUri: https://oauth2.googleapis.com/token
