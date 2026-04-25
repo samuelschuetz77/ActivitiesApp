@@ -754,6 +754,78 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
+          "description": "Number of HTTP requests currently in-flight across the API and Web services. For a Blazor Server app with long-lived SignalR connections this is a reliable proxy for concurrent users.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "blue",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "min": 0,
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "id": 7,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(http_server_active_requests{service_name=~\"activitiesapp-(api|web)\"})",
+              "legendFormat": "active requests",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Concurrent Users",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "description": "Displays the count of how many activities have been created in the past 24 hours",
           "fieldConfig": {
             "defaults": {
@@ -782,7 +854,7 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 6,
+            "x": 12,
             "y": 9
           },
           "id": 6,
