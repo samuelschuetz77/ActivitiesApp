@@ -55,6 +55,8 @@ spec:
               value: grpc
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: deployment.environment=kubernetes,service.namespace=activitiesapp
+            - name: DOTNET_USE_POLLING_FILE_WATCHER
+              value: "true"
           lifecycle:
             preStop:
               exec:
