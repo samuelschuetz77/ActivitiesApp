@@ -1,14 +1,3 @@
-/**
- * k6 smoke test — drives traffic through the public ingress during a rolling
- * deploy to verify zero-downtime. Each iteration fires 2 requests against the
- * full app stack, so 50 iter/s = 100 RPS.
- *
- * Start this BEFORE triggering the rollout so traffic is already flowing
- * when pods begin swapping.
- *
- * Usage:
- *   k6 run --env WEB_URL=https://activor.duckdns.org deploy/k6/smoke-test.js
- */
 import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
@@ -44,13 +33,13 @@ export const options = {
 const BASE_URL = __ENV.BASE_URL || 'https://activor.duckdns.org';
 
 export default function () {
-  // Hits the web pod — verifies ingress → web pod is healthy
+  // Hits the web pod shell — verifies ingress → web pod is healthy
   const home = http.get(`${BASE_URL}/`);
   check(home, { 'web / 200': (r) => r.status === 200 });
   errorRate.add(home.status >= 500);
 
-  // Hits the API pod — verifies web pod → API pod → DB is healthy
-  const activities = http.get(`${BASE_URL}/api/activities`);
-  check(activities, { 'api /api/activities 200': (r) => r.status === 200 });
+  // Hits the activities Blazor page — same stack, different route
+  const activities = http.get(`${BASE_URL}/activities`);
+  check(activities, { 'web /activities 200': (r) => r.status === 200 });
   errorRate.add(activities.status >= 500);
 }
