@@ -22,3 +22,15 @@ data:
         access: proxy
         url: http://loki:3100
         editable: false
+
+      - name: google-cloud-monitoring
+        type: stackdriver
+        uid: gcm
+        access: proxy
+        editable: false
+        jsonData:
+          authenticationType: key
+          defaultProject: activitiesapp-490113
+          tokenUri: https://oauth2.googleapis.com/token
+        secureJsonData:
+          privateKey: $__file{/etc/grafana/gcp-credentials.json}

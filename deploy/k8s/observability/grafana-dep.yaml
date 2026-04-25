@@ -56,6 +56,10 @@ spec:
               subPath: dashboards.yaml
             - name: grafana-dashboards
               mountPath: /var/lib/grafana/dashboards
+            - name: gcp-credentials
+              mountPath: /etc/grafana/gcp-credentials.json
+              subPath: GCP_MONITORING_KEY
+              readOnly: true
       volumes:
         - name: grafana-datasources
           configMap:
@@ -66,3 +70,6 @@ spec:
         - name: grafana-dashboards
           configMap:
             name: grafana-dashboards
+        - name: gcp-credentials
+          secret:
+            secretName: app-secrets

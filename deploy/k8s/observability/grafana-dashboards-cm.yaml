@@ -839,85 +839,8 @@ data:
           "panels": [
             {
               "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "thresholds"
-                  },
-                  "mappings": [],
-                  "min": 0,
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "#6aa84f"
-                      },
-                      {
-                        "color": "#f1c232",
-                        "value": 10
-                      },
-                      {
-                        "color": "#cc4125",
-                        "value": 25
-                      }
-                    ]
-                  },
-                  "unit": "none"
-                },
-                "overrides": []
-              },
-              "gridPos": {
-                "h": 7,
-                "w": 24,
-                "x": 0,
-                "y": 4
-              },
-              "id": 7,
-              "options": {
-                "displayMode": "gradient",
-                "legend": {
-                  "calcs": [],
-                  "displayMode": "list",
-                  "placement": "bottom",
-                  "showLegend": false
-                },
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "left",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "text": {},
-                "valueMode": "color"
-              },
-              "pluginVersion": "12.0.2",
-              "targets": [
-                {
-                  "editorMode": "code",
-                  "expr": "sum by (deployment_environment, api_type) (increase(google_api_requests_total{deployment_environment=~\"$google_environment\", api_type=~\"$google_api_type\"}[$__range]))",
-                  "instant": true,
-                  "legendFormat": "{{deployment_environment}} {{api_type}}",
-                  "refId": "A"
-                }
-              ],
-              "title": "Google API Requests by Environment",
-              "type": "bargauge"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
+                "type": "stackdriver",
+                "uid": "gcm"
               },
               "fieldConfig": {
                 "defaults": {
@@ -932,8 +855,8 @@ data:
                     "axisPlacement": "auto",
                     "barAlignment": 0,
                     "barWidthFactor": 0.6,
-                    "drawStyle": "line",
-                    "fillOpacity": 12,
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
                     "gradientMode": "none",
                     "hideFrom": {
                       "legend": false,
@@ -947,7 +870,7 @@ data:
                     "scaleDistribution": {
                       "type": "linear"
                     },
-                    "showPoints": "auto",
+                    "showPoints": "never",
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
@@ -958,6 +881,7 @@ data:
                     }
                   },
                   "mappings": [],
+                  "min": 0,
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -970,15 +894,46 @@ data:
                       }
                     ]
                   },
-                  "unit": "none"
+                  "unit": "short"
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Daily Limit"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.drawStyle",
+                        "value": "line"
+                      },
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "dash": [10, 10],
+                          "fill": "dash"
+                        }
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 0
+                      }
+                    ]
+                  }
+                ]
               },
               "gridPos": {
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 11
+                "y": 1
               },
               "id": 8,
               "options": {
@@ -1000,14 +955,53 @@ data:
               "pluginVersion": "12.0.2",
               "targets": [
                 {
-                  "editorMode": "code",
-                  "expr": "sum by (deployment_environment, api_type) (increase(google_api_requests_total{deployment_environment=~\"$google_environment\", api_type=~\"$google_api_type\"}[$__interval]))",
-                  "legendFormat": "{{deployment_environment}} {{api_type}}",
-                  "range": true,
-                  "refId": "A"
+                  "aliasBy": "Requests",
+                  "alignmentPeriod": "+86400s",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "datasource": {
+                    "type": "stackdriver",
+                    "uid": "gcm"
+                  },
+                  "editorMode": "visual",
+                  "filters": [
+                    "resource.labels.service",
+                    "=",
+                    "maps.googleapis.com"
+                  ],
+                  "groupBys": [],
+                  "metricKind": "DELTA",
+                  "metricType": "serviceruntime.googleapis.com/api/request_count",
+                  "perSeriesAligner": "ALIGN_DELTA",
+                  "preprocessor": "none",
+                  "queryType": "metrics",
+                  "refId": "A",
+                  "valueType": "INT64"
+                },
+                {
+                  "aliasBy": "Daily Limit",
+                  "alignmentPeriod": "+86400s",
+                  "crossSeriesReducer": "REDUCE_MAX",
+                  "datasource": {
+                    "type": "stackdriver",
+                    "uid": "gcm"
+                  },
+                  "editorMode": "visual",
+                  "filters": [
+                    "resource.labels.service",
+                    "=",
+                    "maps.googleapis.com"
+                  ],
+                  "groupBys": [],
+                  "metricKind": "GAUGE",
+                  "metricType": "serviceruntime.googleapis.com/quota/limit",
+                  "perSeriesAligner": "ALIGN_MEAN",
+                  "preprocessor": "none",
+                  "queryType": "metrics",
+                  "refId": "B",
+                  "valueType": "INT64"
                 }
               ],
-              "title": "Google API Request Trend",
+              "title": "Google API Requests Per Day",
               "type": "timeseries"
             }
           ],
@@ -1023,66 +1017,7 @@ data:
         "observability"
       ],
       "templating": {
-        "list": [
-          {
-            "allValue": ".*",
-            "current": {
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
-            },
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "definition": "label_values(google_api_requests_total, deployment_environment)",
-            "includeAll": true,
-            "label": "Environment",
-            "multi": true,
-            "name": "google_environment",
-            "options": [],
-            "query": {
-              "qryType": 1,
-              "query": "label_values(google_api_requests_total, deployment_environment)",
-              "refId": "PrometheusVariableQueryEditor-VariableQuery"
-            },
-            "refresh": 2,
-            "sort": 1,
-            "type": "query"
-          },
-          {
-            "allValue": ".*",
-            "current": {
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
-            },
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "definition": "label_values(google_api_requests_total, api_type)",
-            "includeAll": true,
-            "label": "Request Type",
-            "multi": true,
-            "name": "google_api_type",
-            "options": [],
-            "query": {
-              "qryType": 1,
-              "query": "label_values(google_api_requests_total, api_type)",
-              "refId": "PrometheusVariableQueryEditor-VariableQuery"
-            },
-            "refresh": 2,
-            "sort": 1,
-            "type": "query"
-          }
-        ]
+        "list": []
       },
       "time": {
         "from": "now/d",

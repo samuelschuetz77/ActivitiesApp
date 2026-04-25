@@ -1,5 +1,32 @@
 # Iteration Log
 
+## 2026-04-24 — Replace Google API panels with GCP Cloud Monitoring graph
+
+### What was changed
+Replaced two Prometheus-based Google API panels (bargauge + timeseries using app-instrumented `google_api_requests_total`) with a single "Google API Requests Per Day" timeseries panel that pulls directly from Google Cloud Monitoring.
+
+**Files modified:**
+- `.github/workflows/deploy.yml` — injects `GCP_MONITORING_KEY` into `app-secrets`
+- `deploy/k8s/observability/grafana-dep.yaml` — mounts `app-secrets/GCP_MONITORING_KEY` as `/etc/grafana/gcp-credentials.json`
+- `deploy/k8s/observability/grafana-datasources-cm.yaml` — adds `stackdriver` datasource (uid: `gcm`, project: `activitiesapp-490113`)
+- `deploy/observability/local/grafana-datasources.yaml` — same for local compose
+- `deploy/observability/local/activitiesapp-observability-dashboard.json` — new panel + removed old `$google_environment`/`$google_api_type` variables
+- `deploy/k8s/observability/grafana-dashboards-cm.yaml` — synced
+
+### New panel design
+Two series in one timeseries panel:
+- **Series A (Requests):** `serviceruntime.googleapis.com/api/request_count`, ALIGN_DELTA, +86400s, REDUCE_SUM, filter: `resource.labels.service = maps.googleapis.com`
+- **Series B (Daily Limit):** `serviceruntime.googleapis.com/quota/limit`, ALIGN_MEAN, +86400s, REDUCE_MAX, same filter. Naturally absent before ~Apr 7 when the 143/day limit was set.
+
+### Manual prerequisite (user must do before deploying)
+1. GCP Console → IAM → Create service account `grafana-monitoring-reader` with `Monitoring Viewer` role
+2. Download JSON key
+3. GitHub repo → Settings → Secrets → add `GCP_MONITORING_KEY` = full JSON file content
+
+### Known risk
+The `quota/limit` metric's `quota_metric` label value for Maps API is not confirmed. If the Daily Limit series returns no data, open Grafana → Edit panel → Metrics Explorer to find the exact label values for `serviceruntime.googleapis.com/quota/limit` filtered to `maps.googleapis.com`.
+
+
 ## 2026-04-22 — Weekly TLS cert renewal CronJob
 
 ### What was added
