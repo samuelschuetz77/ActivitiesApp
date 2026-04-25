@@ -80,7 +80,8 @@
       "PowerShell(gcloud services list *)",
       "PowerShell(gcloud logging read *)",
       "PowerShell(gcloud monitoring metrics list *)",
-      "PowerShell(gcloud beta billing budgets list *)"
+      "PowerShell(gcloud beta billing budgets list *)",
+      "Bash(grep -r \"FeatureFlags\" /c/Users/samuel.schuetz/Desktop/mobile_cloud/ActivitiesApp --include=\"*.cs\" 2>/dev/null | head -10)"
     ]
   }
 }

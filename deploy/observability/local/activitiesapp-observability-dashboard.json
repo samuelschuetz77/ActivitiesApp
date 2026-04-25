@@ -795,7 +795,7 @@
             "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
-                "lastNotNull"
+                "mean"
               ],
               "fields": "",
               "values": false
