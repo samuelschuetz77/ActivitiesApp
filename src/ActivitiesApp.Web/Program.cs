@@ -17,8 +17,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Track concurrent authenticated users for observability
 var activeSessions = new ConcurrentDictionary<string, DateTime>();
-var sessionMeter = new Meter(builder.Environment.ApplicationName);
-sessionMeter.CreateObservableGauge(
+
+builder.AddServiceDefaults();
+
+// Add gauge to the application meter after ServiceDefaults wires up OTEL
+var appMeter = new Meter(builder.Environment.ApplicationName);
+appMeter.CreateObservableGauge(
     "active_users",
     () =>
     {
@@ -29,8 +33,6 @@ sessionMeter.CreateObservableGauge(
     },
     description: "Distinct authenticated Entra ID users active in the last 30 minutes"
 );
-
-builder.AddServiceDefaults();
 
 // Persist Data Protection keys so OIDC correlation cookies survive pod restarts and work across replicas
 var dpKeysPath = builder.Configuration["DataProtectionKeysPath"] ?? "/data-protection-keys";
