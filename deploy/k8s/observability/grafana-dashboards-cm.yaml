@@ -997,8 +997,8 @@ data:
         "list": []
       },
       "time": {
-        "from": "now/d",
-        "to": "now"
+        "from": "now-7d/d",
+        "to": "now/d"
       },
       "timepicker": {},
       "timezone": "browser",
