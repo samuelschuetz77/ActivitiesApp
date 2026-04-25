@@ -184,8 +184,8 @@ jobs:
             --namespace=activitiesapp \
             --from-literal=DUCKDNS_TOKEN='${{ secrets.DUCKDNS_TOKEN }}' \
             --dry-run=client -o yaml | kubectl apply -f -
-          GCP_CLIENT_EMAIL=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | jq -r '.client_email')
-          GCP_PRIVATE_KEY=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | jq -r '.private_key')
+          GCP_CLIENT_EMAIL=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_email"])')
+          GCP_PRIVATE_KEY=$(echo '${{ secrets.GCP_MONITORING_KEY }}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["private_key"])')
           kubectl create secret generic gcp-grafana-secrets \
             --namespace=activitiesapp \
             --from-literal=GCP_CLIENT_EMAIL="$GCP_CLIENT_EMAIL" \
