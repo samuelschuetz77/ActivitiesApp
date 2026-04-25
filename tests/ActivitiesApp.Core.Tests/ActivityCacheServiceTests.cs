@@ -25,7 +25,7 @@ public class ActivityCacheServiceTests
 
         Assert.True(cache.IsLoaded);
         Assert.Single(cache.GetAll());
-        Assert.Equal(2, changed); //Change back to 1
+        Assert.Equal(1, changed);
     }
 
     [Fact]
