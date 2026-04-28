@@ -6,9 +6,12 @@
 @inject IActivityService ActivityService
 @inject NavigationManager Navigation
 @inject ILogger<CreateActivity> Logger
+@inject IFormFactor FormFactor
 
 <PageTitle>Create Activity</PageTitle>
 
+<AuthorizeView>
+<Authorized Context="authContext">
 <div class="create-activity-page">
     <h2>Create a New Activity</h2>
 
@@ -143,6 +146,32 @@
         </div>
     </div>
 }
+
+</Authorized>
+<NotAuthorized>
+    <div class="create-activity-page">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4 text-center">
+                <h2 class="mb-3">Sign in to create an activity</h2>
+                <p class="text-muted mb-4">
+                    Activities are tied to your account, so you need to sign in before opening the create form.
+                </p>
+                @if (FormFactor.IsNative)
+                {
+                    <button class="btn btn-primary" @onclick="GoToProfile">Go to Sign In</button>
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="/MicrosoftIdentity/Account/SignIn" data-enhance-nav="false">
+                        Sign In
+                    </a>
+                }
+                <button class="btn btn-outline-secondary ms-2" @onclick="GoHome">Back Home</button>
+            </div>
+        </div>
+    </div>
+</NotAuthorized>
+</AuthorizeView>
 
 @code {
     private Activity newActivity { get; set; } = new Activity() { Activitytime = DateTime.UtcNow };
@@ -327,6 +356,10 @@
         if (id.HasValue)
             Navigation.NavigateTo($"/activity/{id.Value}");
     }
+
+    private void GoHome() => Navigation.NavigateTo("/");
+
+    private void GoToProfile() => Navigation.NavigateTo("/profile");
 
     private void HandleInvalidSubmit(EditContext editContext)
     {
