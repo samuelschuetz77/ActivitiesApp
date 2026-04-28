@@ -155,7 +155,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
-app.UseStatusCodePagesWithReExecute("/Error");
+app.UseStatusCodePages();
 
 // Skip HTTPS redirect in production k8s (TLS terminates at ingress)
 if (app.Environment.IsDevelopment())
