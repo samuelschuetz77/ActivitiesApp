@@ -57,7 +57,7 @@ public class ActivityRestClient : IActivityService
         catch (MicrosoftIdentityWebChallengeUserException ex)
         {
             _logger.LogError(ex, "REST CreateActivity token acquisition failed — user needs to re-authenticate. MSAL error: {ErrorCode}", ex.MsalUiRequiredException?.ErrorCode);
-            throw new CreateActivityException($"Your login session has expired (MSAL: {ex.MsalUiRequiredException?.ErrorCode} — {ex.MsalUiRequiredException?.Message}). Please sign out and sign back in.", ex);
+            throw new CreateActivityException("Please sign in to create an activity.", ex);
         }
         catch (Exception ex)
         {
