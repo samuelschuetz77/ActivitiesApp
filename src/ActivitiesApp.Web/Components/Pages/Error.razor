@@ -1,14 +1,10 @@
 @page "/Error"
 @using System.Diagnostics
+@using ActivitiesApp.Shared.Layout
 
 <PageTitle>Page not found</PageTitle>
 
-<h1 class="text-danger">Page not found</h1>
-
-<div class="alert alert-light border mt-3 mb-4">
-    <p class="mb-3">You can return to the home page and continue using the app.</p>
-    <a class="btn btn-primary btn-lg" href="/">Go Home</a>
-</div>
+<ErrorDisplay />
 
 @code{
     [CascadingParameter]
