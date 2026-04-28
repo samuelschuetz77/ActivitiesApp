@@ -1,14 +1,3 @@
-/**
- * k6 smoke test — drives traffic through the public ingress during a rolling
- * deploy to verify zero-downtime. Each iteration fires 2 requests against the
- * web frontend, so 50 iter/s = 100 RPS.
- *
- * Start this BEFORE triggering the rollout so traffic is already flowing
- * when pods begin swapping.
- *
- * Usage:
- *   k6 run --env WEB_URL=https://activor.duckdns.org deploy/k6/smoke-test.js
- */
 import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
@@ -26,9 +15,9 @@ export const options = {
       startRate: 0,
       timeUnit: '1s',
       stages: [
-        { duration: '10s', target: 50 },   // ramp to 100 RPS before rollout triggers
-        { duration: '120s', target: 50 },  // hold at 100 RPS through the full rollout window
-        { duration: '10s', target: 0 },    // ramp down after rollout confirmed complete
+        { duration: '10s', target: 100 },   // ramp to 100 RPS per endpoint before rollout triggers
+        { duration: '120s', target: 100 },  // hold at 100 RPS per endpoint through the full rollout window
+        { duration: '10s', target: 0 },     // ramp down after rollout confirmed complete
       ],
     },
   },
@@ -41,14 +30,16 @@ export const options = {
   },
 };
 
-const WEB_URL = __ENV.WEB_URL || 'https://activor.duckdns.org';
+const BASE_URL = __ENV.BASE_URL || 'https://activor.duckdns.org';
 
 export default function () {
-  const webHealth = http.get(`${WEB_URL}/health`);
-  check(webHealth, { 'web /health 200': (r) => r.status === 200 });
-  errorRate.add(webHealth.status >= 500);
+  // Hits the web pod shell — verifies ingress → web pod is healthy
+  const home = http.get(`${BASE_URL}/`);
+  check(home, { 'web / 200': (r) => r.status === 200 });
+  errorRate.add(home.status >= 500);
 
-  const webAlive = http.get(`${WEB_URL}/alive`);
-  check(webAlive, { 'web /alive 200': (r) => r.status === 200 });
-  errorRate.add(webAlive.status >= 500);
+  // Hits the activities Blazor page — same stack, different route
+  const activities = http.get(`${BASE_URL}/activities`);
+  check(activities, { 'web /activities 200': (r) => r.status === 200 });
+  errorRate.add(activities.status >= 500);
 }

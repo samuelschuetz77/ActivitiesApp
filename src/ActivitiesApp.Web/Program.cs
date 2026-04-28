@@ -7,12 +7,32 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
+using System.Security.Claims;
 
 // new push to test pipeline
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Track concurrent authenticated users for observability
+var activeSessions = new ConcurrentDictionary<string, DateTime>();
+
 builder.AddServiceDefaults();
+
+// Add gauge to the application meter after ServiceDefaults wires up OTEL
+var appMeter = new Meter(builder.Environment.ApplicationName);
+appMeter.CreateObservableGauge(
+    "active_users",
+    () =>
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-30);
+        foreach (var key in activeSessions.Where(kv => kv.Value < cutoff).Select(kv => kv.Key))
+            activeSessions.TryRemove(key, out _);
+        return activeSessions.Count;
+    },
+    description: "Distinct authenticated Entra ID users active in the last 30 minutes"
+);
 
 // Persist Data Protection keys so OIDC correlation cookies survive pod restarts and work across replicas
 var dpKeysPath = builder.Configuration["DataProtectionKeysPath"] ?? "/data-protection-keys";
@@ -125,6 +145,16 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Track active authenticated users
+app.Use(async (context, next) =>
+{
+    var userId = context.User?.FindFirstValue("preferred_username")
+              ?? context.User?.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
+    if (userId != null)
+        activeSessions[userId] = DateTime.UtcNow;
+    await next();
+});
 
 app.UseAntiforgery();
 

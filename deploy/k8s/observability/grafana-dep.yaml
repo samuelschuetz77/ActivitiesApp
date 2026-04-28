@@ -28,6 +28,8 @@ spec:
               value: "true"
             - name: GF_USERS_DEFAULT_THEME
               value: "light"
+            - name: GF_SERVER_ROOT_URL
+              value: "https://grafana.activor.duckdns.org"
             - name: GCP_CLIENT_EMAIL
               valueFrom:
                 secretKeyRef:

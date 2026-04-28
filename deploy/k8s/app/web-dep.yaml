@@ -53,8 +53,12 @@ spec:
               value: http://otel-collector:4317
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: grpc
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: deployment.environment=kubernetes,service.namespace=activitiesapp
+              value: "deployment.environment=kubernetes,service.namespace=activitiesapp,service.instance.id=$(POD_NAME)"
             - name: DOTNET_USE_POLLING_FILE_WATCHER
               value: "true"
           lifecycle:
