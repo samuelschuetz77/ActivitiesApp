@@ -63,6 +63,17 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
     {
         var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
             .CreateLogger("OpenIdConnect");
+
+        if (IsAuthenticationCancel(context.Failure, context.Request))
+        {
+            logger.LogInformation(
+                "OpenID Connect sign-in was cancelled by the user on {Path}",
+                context.Request.Path);
+            context.Response.Redirect("/");
+            context.HandleResponse();
+            return Task.CompletedTask;
+        }
+
         logger.LogError(context.Failure,
             "OpenID Connect remote failure on {Path}",
             context.Request.Path);
@@ -76,6 +87,17 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
     {
         var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
             .CreateLogger("OpenIdConnect");
+
+        if (IsAuthenticationCancel(context.Exception, context.Request))
+        {
+            logger.LogInformation(
+                "OpenID Connect authentication was cancelled by the user on {Path}",
+                context.Request.Path);
+            context.Response.Redirect("/");
+            context.HandleResponse();
+            return Task.CompletedTask;
+        }
+
         logger.LogError(context.Exception, "OpenID Connect authentication failed on {Path}", context.Request.Path);
 
         context.Response.Redirect("/Error");
@@ -177,3 +199,22 @@ app.MapRazorComponents<App>()
         typeof(ActivitiesApp.Shared._Imports).Assembly);
 
 app.Run();
+
+static bool IsAuthenticationCancel(Exception? failure, HttpRequest request)
+{
+    var error = request.Query.TryGetValue("error", out var errorValue)
+        ? errorValue.ToString()
+        : string.Empty;
+    var description = request.Query.TryGetValue("error_description", out var descriptionValue)
+        ? descriptionValue.ToString()
+        : string.Empty;
+    var message = failure?.Message ?? string.Empty;
+    var combined = $"{error} {description} {message}";
+
+    return combined.Contains("access_denied", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("user_cancel", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("user canceled", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("user cancelled", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("authentication_canceled", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("AADB2C90091", StringComparison.OrdinalIgnoreCase);
+}
