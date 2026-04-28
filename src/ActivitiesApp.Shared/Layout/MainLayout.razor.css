@@ -8,7 +8,6 @@
 .app-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     padding: 0 1.75rem;
     height: 3.75rem;
     background: #fff;
@@ -17,6 +16,12 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    gap: 1rem;
+}
+
+.login-display {
+    margin-left: auto;
+    white-space: nowrap;
 }
 
 .app-brand {
