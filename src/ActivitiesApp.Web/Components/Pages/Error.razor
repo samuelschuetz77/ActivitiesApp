@@ -1,0 +1,22 @@
+@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Page not found</PageTitle>
+
+<h1 class="text-danger">Page not found</h1>
+
+<div class="alert alert-light border mt-3 mb-4">
+    <p class="mb-3">You can return to the home page and continue using the app.</p>
+    <a class="btn btn-primary btn-lg" href="/">Go Home</a>
+</div>
+
+@code{
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}
