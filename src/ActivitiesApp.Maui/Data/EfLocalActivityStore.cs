@@ -36,6 +36,22 @@ public sealed class EfLocalActivityStore : ILocalActivityStore
         return await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, SyncState>> GetSyncStatesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, SyncState>();
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        return await db.Activities
+            .AsNoTracking()
+            .Where(a => ids.Contains(a.Id))
+            .Select(a => new { a.Id, a.SyncState })
+            .ToDictionaryAsync(a => a.Id, a => a.SyncState, cancellationToken);
+    }
+
     public async Task SaveActivityAsync(LocalActivity activity, CancellationToken cancellationToken = default)
     {
         await SaveActivitiesAsync([activity], cancellationToken);
@@ -43,19 +59,30 @@ public sealed class EfLocalActivityStore : ILocalActivityStore
 
     public async Task SaveActivitiesAsync(IEnumerable<LocalActivity> activities, CancellationToken cancellationToken = default)
     {
+        var incoming = activities as IList<LocalActivity> ?? activities.ToList();
+        if (incoming.Count == 0)
+        {
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-        foreach (var activity in activities)
+        var ids = incoming.Select(a => a.Id).ToList();
+        var existingById = await db.Activities
+            .Where(a => ids.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
+
+        foreach (var activity in incoming)
         {
-            var existing = await db.Activities.FindAsync([activity.Id], cancellationToken);
-            if (existing == null)
+            if (existingById.TryGetValue(activity.Id, out var existing))
+            {
+                Copy(existing, activity);
+            }
+            else
             {
                 db.Activities.Add(Clone(activity));
-                continue;
             }
-
-            Copy(existing, activity);
         }
 
         await db.SaveChangesAsync(cancellationToken);

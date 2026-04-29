@@ -110,8 +110,7 @@ public class SyncService : IDisposable
         var since = await _store.GetLastSyncTimestampAsync(cancellationToken) ?? DateTimeOffset.MinValue;
         _logger.LogInformation("Pulling changes since {Since}", since);
 
-        var itemsToSave = new List<LocalActivity>();
-        var pullCount = 0;
+        var pulledById = new Dictionary<Guid, ActivitySyncRecord>();
         var maxUpdatedAt = since;
 
         await foreach (var item in _syncClient.PullChangesAsync(since, cancellationToken))
@@ -126,15 +125,20 @@ public class SyncService : IDisposable
                 maxUpdatedAt = item.UpdatedAt;
             }
 
-            var existing = await _store.GetActivityAsync(id, cancellationToken);
-            if (existing != null && existing.SyncState != SyncState.Synced)
+            pulledById[id] = item;
+        }
+
+        var existingStates = await _store.GetSyncStatesAsync(pulledById.Keys.ToList(), cancellationToken);
+
+        var itemsToSave = new List<LocalActivity>(pulledById.Count);
+        foreach (var (id, record) in pulledById)
+        {
+            if (existingStates.TryGetValue(id, out var state) && state != SyncState.Synced)
             {
                 continue;
             }
 
-            itemsToSave.Add(ActivityMapping.ToLocalActivity(item, SyncState.Synced));
-
-            pullCount++;
+            itemsToSave.Add(ActivityMapping.ToLocalActivity(record, SyncState.Synced));
         }
 
         if (itemsToSave.Count > 0)
@@ -143,7 +147,7 @@ public class SyncService : IDisposable
         }
 
         await _store.SetLastSyncTimestampAsync(maxUpdatedAt, cancellationToken);
-        _logger.LogInformation("Pulled {Count} changes, new watermark: {Watermark}", pullCount, maxUpdatedAt);
+        _logger.LogInformation("Pulled {Count} changes, new watermark: {Watermark}", itemsToSave.Count, maxUpdatedAt);
     }
 
     public void Dispose()

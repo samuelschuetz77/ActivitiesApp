@@ -21,6 +21,14 @@ internal sealed class InMemoryLocalActivityStore : ILocalActivityStore
     public Task<LocalActivity?> GetActivityAsync(Guid id, CancellationToken cancellationToken = default)
         => Task.FromResult(_activities.TryGetValue(id, out var activity) ? Clone(activity) : null);
 
+    public Task<IReadOnlyDictionary<Guid, SyncState>> GetSyncStatesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyDictionary<Guid, SyncState> result = ids
+            .Where(_activities.ContainsKey)
+            .ToDictionary(id => id, id => _activities[id].SyncState);
+        return Task.FromResult(result);
+    }
+
     public Task SaveActivityAsync(LocalActivity activity, CancellationToken cancellationToken = default)
     {
         _activities[activity.Id] = Clone(activity);

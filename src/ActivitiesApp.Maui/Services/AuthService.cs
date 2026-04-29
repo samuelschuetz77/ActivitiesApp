@@ -1,4 +1,5 @@
 using Microsoft.Identity.Client;
+using System.Security.Claims;
 
 namespace ActivitiesApp.Services;
 
@@ -7,6 +8,7 @@ public class AuthService : IAccessTokenProvider
     private const string ClientId = "6d3dc4ee-33ce-4656-95c8-702a38464687";
     private const string TenantId = "common";
     private const string Authority = $"https://login.microsoftonline.com/{TenantId}";
+    private const string AuthenticationType = "MSAL";
     private static readonly string[] Scopes = [$"api://{ClientId}/access_as_user"];
 
     private readonly IPublicClientApplication _pca;
@@ -17,7 +19,16 @@ public class AuthService : IAccessTokenProvider
     public bool IsSignedIn => _authResult != null;
     public string UserEmail => _authResult?.Account?.Username ?? "";
     public string UserName => _authResult?.ClaimsPrincipal?.FindFirst("name")?.Value ?? UserEmail;
-    public System.Security.Claims.ClaimsPrincipal? Principal => _authResult?.ClaimsPrincipal;
+
+    public ClaimsPrincipal? Principal
+    {
+        get
+        {
+            var msal = _authResult?.ClaimsPrincipal;
+            if (msal?.Identity is null) return null;
+            return new ClaimsPrincipal(new ClaimsIdentity(msal.Claims, AuthenticationType));
+        }
+    }
 
     public AuthService()
     {
@@ -74,14 +85,23 @@ public class AuthService : IAccessTokenProvider
 
         if (account == null) return null;
 
+        var hadResult = _authResult != null;
         try
         {
             _authResult = await _pca.AcquireTokenSilent(Scopes, account).ExecuteAsync();
+            if (!hadResult)
+            {
+                AuthenticationStateChanged?.Invoke();
+            }
             return _authResult.AccessToken;
         }
         catch (MsalUiRequiredException)
         {
             _authResult = null;
+            if (hadResult)
+            {
+                AuthenticationStateChanged?.Invoke();
+            }
             return null;
         }
     }
