@@ -28,7 +28,9 @@ nav.tab-nav a.tab-item {
     flex-direction: row;
     align-items: center;
     justify-content: center;
+    align-self: center;
     gap: 0.45rem;
+    height: auto;
     padding: 0.45rem 1.35rem;
     border-radius: 0.55rem;
     text-decoration: none;
